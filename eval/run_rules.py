@@ -13,6 +13,8 @@ from __future__ import annotations
 
 import argparse
 import sys
+
+sys.stdout.reconfigure(line_buffering=True)
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from collections import Counter
 from pathlib import Path

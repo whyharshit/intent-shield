@@ -320,6 +320,14 @@ class GeminiProvider:
                     self.last_error = f"transient: {message[:120]}"
                     time.sleep(min(2 ** attempt, 8))
                     continue
+                if "client has been closed" in message:
+                    # the SDK closes a client on some transport faults; rebuild
+                    # rather than fail every subsequent call on that key
+                    with self._lock:
+                        self._clients = []
+                    if not self._ensure_clients():
+                        return None
+                    continue
                 self.last_error = f"{type(exc).__name__}: {message[:200]}"
                 return None
 

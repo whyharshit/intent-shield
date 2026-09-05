@@ -9,7 +9,20 @@ uvicorn[standard]>=0.29
 # Mandate signing — AP2 uses ECDSA P-256
 cryptography>=42.0
 
-# Category mapping and calibration (Milestone 2+)
+# Category mapping and calibration.
+#
+# torch must be the CPU build. The default CUDA wheel loads ~2GB of GPU DLLs
+# this project never uses, and on a 16GB machine that fails with
+# "WinError 1455: the paging file is too small" -- which the mapper catches and
+# reports as degraded, silently dropping category accuracy. Install with:
+#     pip install --index-url https://download.pytorch.org/whl/cpu torch
+#
+# transformers must stay on 4.x: 5.x moved PreTrainedModel and
+# sentence-transformers cannot import it. torchvision must NOT be installed --
+# a stale build raises "operator torchvision::nms does not exist" and breaks
+# the transformers import chain.
+torch>=2.6
+transformers>=4.41,<5
 sentence-transformers>=2.7
 numpy>=1.26
 scikit-learn>=1.4
