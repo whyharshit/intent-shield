@@ -14,6 +14,10 @@ data/raw/
 archive*/
 archive*.zip
 
+# Downloaded model weights (~88MB). `make setup` fetches them on first use;
+# the mapper degrades to keywords and says so if they are unavailable.
+data/cache/
+
 # Generated.
 #
 # data/catalog/catalog.jsonl IS committed, deliberately. data/raw/ cannot be
