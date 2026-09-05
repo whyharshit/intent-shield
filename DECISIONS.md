@@ -17,7 +17,14 @@ quietly renegotiated later.
 | K3 | The deterministic path resolves under 40% of cases | Every transaction hits an LLM. Unusable latency and cost. |
 | K4 | Razorpay ships conformance checking at Global Fintech Fest | The novelty claim collapses; reposition onto the India rails mapping and the evaluation methodology. |
 
-None have fired. K1 is not yet testable — the baseline runs in Milestone 2.
+**K1 has been tested and has not fired.** The baseline scores 16.8% violation
+recall on train+validation (n=3,126): 100% on AMOUNT_EXCEEDED and
+MERCHANT_OUT_OF_SCOPE, 0% on the other ten types. That is the premise of the
+project, measured rather than assumed. Asserted in `tests/test_baseline.py`, so
+a dataset change that quietly makes the baseline look good will fail the suite.
+
+K2 and K3 become testable when the category mapper and the deterministic
+checker exist.
 
 ---
 
@@ -213,3 +220,95 @@ Tobacco (no source obtained), footwear (D-004), men's apparel and bags (the
 Myntra source is women's only), and the `services` leaves (add-ons are generated
 at cart-build time, not catalog entries). The taxonomy keeps them: a mandate can
 deny a category that has no stock behind it, and it should still parse.
+
+---
+
+## Milestone 2 — dataset and baseline
+
+**D-018 · P-003 resolved: an empty `merchants_allowed` means no restriction.**
+The alternative reading — empty means deny-all — would have the baseline refuse
+nearly every cart, inflating its recall toward 1.0 and making the headline
+comparison meaningless in Warrant's favour. The permissive reading is also what
+the AP2 reference implementation does. Asserted in `tests/test_baseline.py`.
+
+**D-019 · P-005 resolved: ~3,900 pairs, with violation types quota'd per split.**
+04 §4's 400-pair test set over twelve types gives ~15 each and a 95% interval of
+roughly +/-25 points on per-type recall — too wide for the table 04 §6 makes a
+headline artifact. Generation costs 1.7 seconds, so the dataset is 4,000
+mandates and each split fills its rarest violation type first. Every type now
+has 25-29 test cases. Splits stay 60/20/20 by mandate.
+
+**D-020 · Brand names are drawn from the catalog, not from a hardcoded list.**
+The first version sampled plausible Indian brands (Fortune, Dabur, Patanjali,
+Parle) of which most had zero SKUs in the 800-item catalog. "Avoid Dabur" was
+therefore unbreachable, and BRAND_EXCLUSION ended up with **zero test cases**.
+Pools are now derived per-root from the catalog, so a mandate may only name a
+brand the catalog can actually supply.
+
+**D-021 · Rare violation types get their preconditions injected probabilistically.**
+Only 1 of 30 templates locks a merchant and 2 carry a brand exclusion, which
+starved V7 and V5. A template without the feature now gets one ~28% of the time,
+and the intent text says so out loud — otherwise extraction could not have
+found it and the pair would be unfair.
+
+**D-022 · One violation per pair.**
+Real carts breach several constraints at once, but a pair with two violations
+makes per-type recall unattributable, and that table is the headline artifact.
+Multi-violation carts belong in the adversarial set, where each is named.
+
+**D-023 · `checked_at` is a field on the pair, not `now()`.**
+V8 MANDATE_EXPIRED is expressed by moving the verification clock past expiry,
+and a dataset whose labels depend on when it is run is not a dataset.
+
+**D-024 · `prior_approvals` added to close P-002.**
+03 §2 carries no model for mandate state, so V9 FREQUENCY_EXCEEDED and the
+cumulative-spend check were unverifiable. The generator emits the approval
+history alongside each pair.
+
+**D-025 · An independent label audit, not just generator tests.**
+`tests/test_dataset.py` re-derives conformance from each mandate's own
+constraints rather than trusting the generator: every conforming pair is
+checked against amount, expiry, scope, denied categories, merchant, delivery,
+add-ons, brand exclusions and frequency. It caught two real defects (see L-005,
+L-006). This is the cheapest available answer to 07 §R2.
+
+**D-026 · The baseline runs on train and validation only.**
+`eval/run_baseline.py` refuses `--splits test` outright. K1 asks whether the gap
+exists, and train answers that as well as test would. The test split stays
+sealed for the final run.
+
+**D-027 · False positives are counted as refusals, not escalations.**
+An escalated conforming cart is a delayed sale, not a lost one, and 02 §4 is
+explicit that escalation is the product rather than a failure mode. Counting
+escalations as false positives would make the cost model punish the behaviour
+it exists to encourage.
+
+---
+
+## Measured limitations — Milestone 2
+
+**L-005 · A substitution injector was producing non-violations.**
+It swapped radish for dill leaves and labelled it UNAUTHORIZED_SUBSTITUTION.
+Both are produce, and 04 §3 is explicit that an equivalent substitution is
+*conforming* — refusing it is a false positive that would kill adoption. A
+substitution now has to cross a category root or contradict a stated dietary or
+quality term; when a mandate's scope spans a single root, the injector declines
+rather than manufacture a weak label. `violation_detail` was added to the pair
+schema so this is machine-checkable instead of recorded only in prose.
+
+**L-006 · Injectors were producing carts with duplicate SKUs.**
+Two add-ons shared a category-derived SKU, and several injectors appended items
+the cart already held. A real checkout consolidates quantity onto one line, so
+this was a visible generator artefact. Guarded and tested.
+
+**L-007 · 92 of 4,000 mandates (2.3%) produce no usable pair.**
+Mostly narrow-scope mandates where the catalog cannot supply enough distinct
+in-scope items under the cap. They are dropped, which biases the dataset very
+slightly toward mandates the catalog serves well. Worth stating; too small to
+distort the metrics.
+
+**L-008 · Generated violations are unambiguous by construction.**
+Every injected violation has a clear correct answer, so the generated set
+cannot measure how well the system handles genuine ambiguity. That is what the
+40 hand-written adversarial near-misses are for, and why several of them expect
+ESCALATE rather than REFUSE. Not yet written.

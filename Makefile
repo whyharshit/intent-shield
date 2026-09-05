@@ -14,11 +14,12 @@ SEED   ?= 1337
 SIZE   ?= 800
 
 .DEFAULT_GOAL := help
-.PHONY: help setup dataset catalog report eval test lint clean
+.PHONY: help setup dataset catalog pairs baseline report eval test lint clean
 
 help:
 	@echo "setup     install dependencies"
 	@echo "dataset   build the catalog and (later) the labelled pairs"
+	@echo "baseline  run the AP2 reference baseline (kill criterion K1)"
 	@echo "eval      run the evaluation and rewrite eval/REPORT.md"
 	@echo "test      run the test suite"
 	@echo "report    catalog mapping coverage and composition"
@@ -34,10 +35,16 @@ setup:
 # Milestone 1 builds the catalog. intents, carts and violation injectors land
 # in Milestone 2 and hang off this same target.
 
-dataset: catalog
+dataset: catalog pairs
 
 catalog:
 	$(PYTHON) data/generator/catalog.py --build --seed $(SEED) --size $(SIZE)
+
+pairs:
+	$(PYTHON) data/generator/make_dataset.py --build --seed $(SEED)
+
+baseline:
+	$(PYTHON) eval/run_baseline.py --seed $(SEED)
 
 report:
 	$(PYTHON) data/generator/catalog.py --report --seed $(SEED)
