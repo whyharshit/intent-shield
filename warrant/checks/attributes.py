@@ -346,6 +346,118 @@ class GeminiProvider:
 
 
 @dataclass
+class OpenAICompatibleProvider:
+    """Any OpenAI-compatible chat-completions endpoint.
+
+    Covers Muse Spark on Meta's API (`https://api.meta.ai/v1`, model
+    `muse-spark-1.3`) and the several gateways that resell it, plus any other
+    provider that matches the same contract. Configured entirely from the
+    environment so adding one is a `.env` change, not a code change.
+
+    Structured output is requested via `response_format: json_schema` where the
+    endpoint supports it, and the reply is validated against the Pydantic model
+    regardless. A provider that ignores the schema and returns prose fails
+    validation and becomes `uncertain` — never a silent pass.
+    """
+
+    base_url: str = ""
+    model: str = ""
+    api_key: str = ""
+    name: str = "openai-compatible"
+    last_error: str | None = None
+
+    def __post_init__(self):
+        self.base_url = (self.base_url
+                         or os.environ.get("WARRANT_OPENAI_BASE_URL", "")).rstrip("/")
+        self.model = self.model or os.environ.get("WARRANT_OPENAI_MODEL", "")
+        self.api_key = self.api_key or os.environ.get("WARRANT_OPENAI_KEY", "")
+
+    def _redact(self, text: str) -> str:
+        return text.replace(self.api_key, "<redacted>") if self.api_key else text
+
+    def available(self) -> bool:
+        return bool(self.base_url and self.model and self.api_key)
+
+    @staticmethod
+    def _strict_schema(schema: type[BaseModel]) -> dict:
+        """Pydantic's JSON schema, tightened for strict structured output.
+
+        Strict mode requires `additionalProperties: false` on every object and
+        every property listed in `required` — Pydantic emits neither, so a raw
+        `model_json_schema()` is rejected with a 400. Applied recursively,
+        including through `$defs`.
+        """
+        def tighten(node):
+            if isinstance(node, dict):
+                if node.get("type") == "object" or "properties" in node:
+                    node["additionalProperties"] = False
+                    props = node.get("properties")
+                    if isinstance(props, dict):
+                        node["required"] = list(props)
+                for value in node.values():
+                    tighten(value)
+            elif isinstance(node, list):
+                for value in node:
+                    tighten(value)
+            return node
+
+        return tighten(schema.model_json_schema())
+
+    def assess(self, system: str, user: str, schema: type[BaseModel]):
+        if not self.available():
+            self.last_error = "WARRANT_OPENAI_{BASE_URL,MODEL,KEY} not all set"
+            return None
+        import json as _json
+        import urllib.error
+        import urllib.request
+
+        payload = {
+            "model": self.model,
+            "messages": [
+                {"role": "system", "content": system},
+                {"role": "user", "content": user},
+            ],
+            "max_tokens": MAX_TOKENS,
+            "temperature": 0,
+            "response_format": {
+                "type": "json_schema",
+                "json_schema": {
+                    "name": schema.__name__,
+                    "schema": self._strict_schema(schema),
+                    "strict": True,
+                },
+            },
+        }
+        request = urllib.request.Request(
+            f"{self.base_url}/chat/completions",
+            data=_json.dumps(payload).encode("utf-8"),
+            headers={
+                "Authorization": f"Bearer {self.api_key}",
+                "Content-Type": "application/json",
+            },
+        )
+        try:
+            with urllib.request.urlopen(request, timeout=90) as response:
+                body = _json.loads(response.read())
+        except urllib.error.HTTPError as exc:
+            detail = self._redact(exc.read().decode(errors="replace")[:200])
+            # 402 is worth naming: the key is good, the account is not funded.
+            hint = " (billing not configured)" if exc.code == 402 else ""
+            self.last_error = f"HTTP {exc.code}{hint}: {detail}"
+            return None
+        except Exception as exc:
+            self.last_error = self._redact(f"{type(exc).__name__}: {exc}")[:200]
+            return None
+
+        try:
+            content = body["choices"][0]["message"]["content"]
+            return schema.model_validate_json(content)
+        except (KeyError, IndexError, ValidationError, ValueError) as exc:
+            self.last_error = f"unparseable response: {type(exc).__name__}"
+            return None
+
+
+@dataclass
 class UnavailableProvider:
     """Stands in when no model is configured.
 
@@ -578,6 +690,10 @@ def _default_provider() -> LLMProvider:
         provider = GeminiProvider()
         return provider if provider._ensure_clients() else None
 
+    def _openai_compatible() -> LLMProvider | None:
+        provider = OpenAICompatibleProvider()
+        return provider if provider.available() else None
+
     def _anthropic() -> LLMProvider | None:
         provider = AnthropicProvider(
             model=os.environ.get("WARRANT_ANTHROPIC_MODEL", DEFAULT_MODEL)
@@ -588,8 +704,14 @@ def _default_provider() -> LLMProvider:
         return _gemini() or UnavailableProvider(last_error="gemini unavailable")
     if choice == "anthropic":
         return _anthropic() or UnavailableProvider(last_error="anthropic unavailable")
+    if choice in ("openai", "openai-compatible", "muse"):
+        return _openai_compatible() or UnavailableProvider(
+            last_error="WARRANT_OPENAI_{BASE_URL,MODEL,KEY} not all set"
+        )
+    if choice == "none":
+        return UnavailableProvider(last_error="provider disabled by configuration")
 
-    return _gemini() or _anthropic() or UnavailableProvider(
-        last_error="no LLM credentials configured (set GEMINI_API_KEY "
-                   "or ANTHROPIC_API_KEY in .env)"
+    return _openai_compatible() or _gemini() or _anthropic() or UnavailableProvider(
+        last_error="no LLM credentials configured (set GEMINI_API_KEY, "
+                   "ANTHROPIC_API_KEY, or WARRANT_OPENAI_* in .env)"
     )
