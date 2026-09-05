@@ -14,8 +14,10 @@ sentence-transformers>=2.7
 numpy>=1.26
 scikit-learn>=1.4
 
-# LLM provider, kept behind an interface
-anthropic>=0.30
+# LLM provider, kept behind an interface.
+# 1.x is required: the semantic checker uses `client.messages.parse()` for
+# schema-forced structured output, which does not exist in 0.x.
+anthropic>=1.4
 
 # UI and eval
 streamlit>=1.33

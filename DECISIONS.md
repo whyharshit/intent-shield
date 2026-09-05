@@ -412,3 +412,111 @@ BRAND_EXCLUSION, QUANTITY_ANOMALY and UNAUTHORIZED_SUBSTITUTION are marked
 `model` in the taxonomy and the semantic checker does not exist yet. They score
 59-75% only because uncertainty elsewhere escalates the cart. Those numbers will
 move once C4 stage 2 lands and should not be read as rule-layer performance.
+
+---
+
+## Milestone 5 - semantic checker, cost policy, calibration
+
+**D-034 - `temperature=0` is impossible; determinism comes from elsewhere.**
+03 SS3.1 specifies temperature 0 for the extraction and attribute calls.
+Sampling parameters were removed on current Claude models and sending one
+returns a 400, so that instruction cannot be followed as written. Determinism
+now comes from schema-forced structured output (`client.messages.parse` with a
+Pydantic `output_format`) plus a fixed low effort setting. The doc predates the
+API change.
+
+**D-035 - The semantic checker returns per-constraint verdicts, never a decision.**
+`satisfied | violated | not_determinable` per stated constraint, mapped onto
+`CheckResult`s the same way rule outcomes are. The model never sees a verdict
+field and never emits one. This is what makes the traffic-split argument in
+07 SSR4 true rather than rhetorical: rules and the cost solver decide, the model
+judges attributes and writes explanations.
+
+**D-036 - Escalation is not free, and its cost falls as cart value rises.**
+The first cost model priced escalation at a flat Rs 12 of friction. That made
+escalation cheaper than either error across p(violation) from 0.02 to 0.84, so
+the policy escalated almost everything - the exact failure 02 SS4 warns about.
+Adding an abandonment term fixed the level; making that term *decay with cart
+value* fixed the direction.
+
+With a flat abandonment rate the policy allowed large carts at **higher**
+uncertainty than small ones, because the cost of escalating grew with value
+faster than the cost of wrongly allowing did near the boundary. That inverts
+02 SS5, which requires a Rs 40,000 cart to escalate at lower uncertainty than a
+Rs 200 one. Abandonment now decays from 22% to 4% between Rs 0 and Rs 15,000 -
+people tolerate a confirmation step on a considered purchase, and above
+Rs 15,000 RBI already mandates AFA, so a step-up there is expected rather than
+surprising. Asserted in `tests/test_decide.py`.
+
+**D-037 - A brand *preference* breach escalates; a brand *exclusion* breach refuses.**
+04 SS3 is explicit that refusing an equivalent substitution (Amul milk for
+Nandini milk) is a false positive that would kill adoption. "Prefer Amul" is not
+"never buy Nandini". An exclusion is a requirement and does refuse.
+
+**D-038 - `ambiguous_terms` are never sent to the model.**
+Extraction flags them precisely because it could not pin them down. Asking a
+model to adjudicate them would launder an unknown into a verdict. They lower
+confidence and raise the escalation rate instead, which is the behaviour 07 SSB
+argues for when an intent is genuinely vague.
+
+**D-039 - The model is never consulted after a hard failure.**
+A cart that breaches its amount cap is refused by a comparison; sending it to a
+model afterwards would cost latency and money to confirm something already
+known. Asserted with a spy provider.
+
+**D-040 - Raw scores are coarse and calibration learns what they mean.**
+The pipeline emits one of five raw scores by provenance (clean, rule-uncertain,
+soft-uncertain, soft-violated, hard-failure) rather than a fine-grained
+confidence. Inventing more precision than the evidence supports would be a
+guess dressed up as a probability; isotonic regression on the validation split
+learns the empirical violation rate behind each.
+
+**D-041 - The calibrator refuses to fit on thin or single-class data.**
+Under 20 points or one class present, it stays unfitted and passes scores
+through unchanged rather than inventing a mapping from noise.
+
+**D-042 - A CERT-In-shaped autonomy ceiling above Rs 50,000.**
+Above the ceiling, ALLOW is removed from the option set entirely and only
+REFUSE or ESCALATE remain, whatever the expected costs say. CERT-In's 2025-26
+report proposed mandating human-in-the-loop control for agentic actions above a
+financial threshold. The number is a placeholder; the mechanism is the point.
+
+**D-043 - The Anthropic SDK is pinned to >=1.4.**
+`client.messages.parse()` - the schema-forced structured-output path - does not
+exist in 0.x. The installed 0.57.1 failed at runtime with
+`'Messages' object has no attribute 'parse'`.
+
+---
+
+## Measured limitations - Milestone 5
+
+**L-014 - No API key was configured, so the semantic checker has never run live.**
+Every number involving soft constraints is currently produced by the
+fail-closed path: the provider is unavailable, every constraint returns
+`not_determinable`, and the cart escalates. That is correct behaviour (rule 5,
+03 SS7) and it is asserted in tests, but it is not a measurement of the
+system. `eval/run_rules.py` prints a blocking DEGRADED banner rather than let
+those numbers be mistaken for results.
+
+Degraded-mode recall reads 98.8% at 60.6% escalation. Both are artefacts of
+escalating nearly everything; precision sits at the base rate. Do not quote
+them.
+
+**L-015 - The escalation band is still wide even with the cost model.**
+At a Rs 2,000 cart the policy allows below p=0.08 and refuses above p=0.81,
+escalating in between. That band is a consequence of the cost asymmetry - a
+wrong approval costs several times a wrong refusal - and it is only defensible
+once calibration is fitted on real graded confidences. With the coarse
+five-value score, most carts land on one of two interior values and escalate.
+
+**L-016 - Calibration has very little to fit on.**
+Rules settle most carts with a hard 0 or 1, which carries no gradation. Only
+the fraction reaching the semantic checker has a genuinely graded confidence,
+so the effective calibration set is far smaller than the validation split.
+`Calibrator.n_effective` reports it alongside the ECE so the number is read
+with that in mind.
+
+**L-017 - The test suite segfaulted at interpreter shutdown on Windows.**
+All tests passed but the process exited 139, which would fail CI. torch's
+native threads were torn down while the module-level LRU cache still held the
+embedding model. A session-scoped teardown clears the cache first.

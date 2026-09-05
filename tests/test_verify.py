@@ -12,15 +12,56 @@ from datetime import timedelta
 import pytest
 
 from conftest import NOW, cart, line
+from warrant.checks.attributes import (
+    AttributeAssessment,
+    AttributeChecker,
+    ConstraintFinding,
+    UnavailableProvider,
+    collect_constraints,
+)
 from warrant.checks.deterministic import PriorApproval
 from warrant.verify import Verifier
+
 
 pytest.importorskip("sentence_transformers")
 
 
+class _AlwaysSatisfied:
+    """Stand-in semantic checker that finds every stated constraint honoured.
+
+    Returns one finding per constraint the prompt asked about, so the pipeline
+    tests measure the pipeline rather than whether an API key happens to be
+    configured. The real provider is exercised in test_attributes.py.
+    """
+
+    name = "always-satisfied"
+    last_error = None
+
+    def assess(self, system, user, schema):
+        header = user[: user.index("<cart_data>")]
+        n = sum(1 for ln in header.splitlines() if ln.strip()[:2].rstrip(".").isdigit())
+        return AttributeAssessment(findings=[
+            ConstraintFinding(constraint=f"c{i}", verdict="satisfied",
+                              reasoning="stub")
+            for i in range(max(n, 1))
+        ])
+
+
 @pytest.fixture(scope="module")
 def verifier() -> Verifier:
-    return Verifier()
+    """A verifier whose semantic checker is available and agreeable.
+
+    The soft-constraint path is exercised on its own in test_attributes.py.
+    Here it is stubbed so these tests measure the pipeline, not whether an API
+    key happens to be configured. `verifier_no_model` covers the fail-closed
+    case explicitly.
+    """
+    return Verifier(attribute_checker=AttributeChecker(provider=_AlwaysSatisfied()))
+
+
+@pytest.fixture(scope="module")
+def verifier_no_model() -> Verifier:
+    return Verifier(attribute_checker=AttributeChecker(provider=UnavailableProvider()))
 
 
 def test_a_conforming_grocery_cart_is_allowed(verifier, mandate) -> None:
@@ -154,12 +195,42 @@ def test_a_refusal_always_names_a_failing_check(verifier, mandate) -> None:
     assert r.failed
 
 
-def test_soft_constraints_are_flagged_as_pending_not_silently_passed(
-    verifier, mandate
+def test_an_unavailable_model_escalates_and_never_allows(
+    verifier_no_model, mandate
 ) -> None:
-    """The semantic checker does not exist yet, and the result says so."""
+    """Rule 5 / 03 §7: fail closed.
+
+    A cart that passes every rule but has soft constraints the model could not
+    assess must escalate. Allowing it would be the failure mode the whole
+    design exists to avoid.
+    """
     assert mandate.soft.brand_preferences
     c = cart(line("line_001", unit=5_000, title="Amul Butter"))
-    r = verifier.verify(mandate, c, NOW)
-    assert r.verdict == "ALLOW"
-    assert r.soft_constraints_pending
+    r = verifier_no_model.verify(mandate, c, NOW)
+    assert r.verdict == "ESCALATE"
+    assert r.degraded
+    assert not any(ch.result == "pass" and ch.decided_by == "model" for ch in r.checks)
+
+
+def test_a_hard_failure_still_refuses_without_a_model(
+    verifier_no_model, mandate
+) -> None:
+    """Degrading must not weaken refusals — only approvals."""
+    c = cart(line("line_001", unit=300_000, title="Amul Butter"))
+    r = verifier_no_model.verify(mandate, c, NOW)
+    assert r.verdict == "REFUSE"
+
+
+def test_the_model_is_never_consulted_after_a_hard_failure(mandate) -> None:
+    """Cost and latency: a cart already refused by a comparison must not
+    reach a language model."""
+    calls = []
+
+    class _Spy(UnavailableProvider):
+        def assess(self, system, user, schema):
+            calls.append(user)
+            return None
+
+    v = Verifier(attribute_checker=AttributeChecker(provider=_Spy()))
+    v.verify(mandate, cart(line("line_001", unit=300_000, title="Amul Butter")), NOW)
+    assert calls == [], "model was consulted despite a breached hard constraint"

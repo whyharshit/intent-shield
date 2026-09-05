@@ -14,6 +14,27 @@ NOW = datetime(2026, 9, 5, 12, 0, 0, tzinfo=timezone.utc)
 HEX = "a" * 64
 
 
+@pytest.fixture(scope="session", autouse=True)
+def _release_embedding_model():
+    """Drop the cached sentence-transformers model before interpreter shutdown.
+
+    Without this the suite passes but the process segfaults on exit (exit 139)
+    on Windows: torch's native threads are torn down while the module-level
+    LRU cache still holds the model. A non-zero exit fails CI even though every
+    test passed, so the cache is cleared while the interpreter is still healthy.
+    """
+    yield
+    try:
+        from warrant.checks.categories import default_mapper
+
+        default_mapper.cache_clear()
+    except Exception:
+        pass
+    import gc
+
+    gc.collect()
+
+
 @pytest.fixture
 def hard() -> HardConstraints:
     return HardConstraints(

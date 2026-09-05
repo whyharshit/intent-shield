@@ -64,6 +64,22 @@ def main() -> None:
         print("WARNING: embeddings unavailable — mapper degraded\n", file=sys.stderr)
 
     results = verify_all(pairs, verifier)
+
+    degraded = [r for r in results if r.degraded]
+    if degraded:
+        reason = degraded[0].degraded_reason
+        print("=" * 70)
+        print("  DEGRADED RUN — THESE ARE NOT THE SYSTEM'S NUMBERS")
+        print("=" * 70)
+        print(f"  The semantic checker was unavailable: {reason}")
+        print(f"  {len(degraded)}/{len(results)} carts had soft constraints that")
+        print("  could not be assessed, so every one of them returned uncertain")
+        print("  and escalated. That is the fail-closed path working correctly")
+        print("  (03 §7: never fall back to ALLOW), but recall below is inflated")
+        print("  by escalating almost everything, and precision is near the base")
+        print("  rate. Set ANTHROPIC_API_KEY or run `ant auth login` for real")
+        print("  numbers.")
+        print("=" * 70 + "\n")
     warrant = [Outcome(pair=p, verdict=r.verdict) for p, r in zip(pairs, results)]
     base = [
         Outcome(pair=p, verdict=r.verdict)
