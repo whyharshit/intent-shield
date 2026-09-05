@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import argparse
 import sys
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from collections import Counter
 from pathlib import Path
 
@@ -28,15 +29,36 @@ from warrant.verify import Verifier
 K3_THRESHOLD = 0.40
 
 
-def verify_all(pairs: list[Pair], verifier: Verifier):
-    out = []
-    for p in pairs:
+def verify_all(pairs: list[Pair], verifier: Verifier, workers: int = 8):
+    """Verify every pair, in parallel when a model is in the loop.
+
+    Each verification is independent, and the semantic checker spends almost
+    all of its time waiting on the network. Serially a full run is about an
+    hour; with a small thread pool it is minutes. The provider rotates API keys
+    under a lock and parks rate-limited ones, so concurrency raises throughput
+    without tripping per-key quotas.
+    """
+    def one(p: Pair):
         priors = [
             PriorApproval(approved_at=a.approved_at, amount_paise=a.amount_paise)
             for a in p.prior_approvals
         ]
-        out.append(verifier.verify(p.mandate, p.cart, p.checked_at, priors))
-    return out
+        return verifier.verify(p.mandate, p.cart, p.checked_at, priors)
+
+    needs_model = verifier.attributes is not None
+    if not needs_model or workers <= 1:
+        return [one(p) for p in pairs]
+
+    results: list = [None] * len(pairs)
+    with ThreadPoolExecutor(max_workers=workers) as pool:
+        futures = {pool.submit(one, p): i for i, p in enumerate(pairs)}
+        done = 0
+        for fut in as_completed(futures):
+            results[futures[fut]] = fut.result()
+            done += 1
+            if done % 250 == 0:
+                print(f"  ... {done}/{len(pairs)}", file=sys.stderr)
+    return results
 
 
 def main() -> None:
@@ -44,6 +66,8 @@ def main() -> None:
     ap.add_argument("--seed", type=int, default=1337)
     ap.add_argument("--splits", default="train,validation")
     ap.add_argument("--limit", type=int, default=0)
+    ap.add_argument("--workers", type=int, default=8,
+                    help="parallel verifications; 1 to disable")
     args = ap.parse_args()
 
     names = [s.strip() for s in args.splits.split(",")]
@@ -63,7 +87,7 @@ def main() -> None:
     if verifier.mapper.degraded:
         print("WARNING: embeddings unavailable — mapper degraded\n", file=sys.stderr)
 
-    results = verify_all(pairs, verifier)
+    results = verify_all(pairs, verifier, args.workers)
 
     degraded = [r for r in results if r.degraded]
     if degraded:
@@ -131,25 +155,35 @@ def main() -> None:
     # "every transaction hitting an LLM means unusable latency and cost". An
     # escalation goes to a human, not to a model, so it is not LLM traffic.
     # The number that matters is how much would reach C4 stage 2.
-    settled = sum(1 for r in results if r.verdict in ("REFUSE", "ALLOW")
-                  and not r.soft_constraints_pending)
+    consulted = sum(1 for r in results if r.consulted_model)
+    settled = sum(1 for r in results if not r.consulted_model)
     escalated = sum(1 for r in results if r.verdict == "ESCALATE")
-    pending = sum(1 for r in results if r.soft_constraints_pending)
     lat = sorted(r.latency_ms for r in results)
+    lat_rule = sorted(r.latency_ms for r in results if not r.consulted_model)
+    lat_model = sorted(r.latency_ms for r in results if r.consulted_model)
 
     print(f"\n{'path':<34}{'n':>7}{'share':>9}")
-    print(f"{'settled by rules alone':<34}{settled:>7}{settled/wm.n:>9.1%}")
-    print(f"{'escalated (uncertain)':<34}{escalated:>7}{escalated/wm.n:>9.1%}")
-    print(f"{'would reach the semantic checker':<34}{pending:>7}{pending/wm.n:>9.1%}")
-    print(f"\nlatency p50 {lat[len(lat)//2]}ms   "
-          f"p95 {lat[int(len(lat)*0.95)]}ms   max {lat[-1]}ms")
+    print(f"{'settled without a model':<34}{settled:>7}{settled/wm.n:>9.1%}")
+    print(f"{'reached the semantic checker':<34}{consulted:>7}{consulted/wm.n:>9.1%}")
+    print(f"{'escalated to a human (any path)':<34}{escalated:>7}{escalated/wm.n:>9.1%}")
 
-    no_model = 1 - pending / wm.n
+    def _pct(xs, q):
+        return xs[min(int(len(xs) * q), len(xs) - 1)] if xs else 0
+
+    print(f"\nlatency  overall   p50 {_pct(lat,0.5):>6}ms  p95 {_pct(lat,0.95):>6}ms")
+    if lat_rule:
+        print(f"         rules     p50 {_pct(lat_rule,0.5):>6}ms  "
+              f"p95 {_pct(lat_rule,0.95):>6}ms   <- the 300ms budget applies here")
+    if lat_model:
+        print(f"         with LLM  p50 {_pct(lat_model,0.5):>6}ms  "
+              f"p95 {_pct(lat_model,0.95):>6}ms")
+
+    no_model = 1 - consulted / wm.n
     print("\n" + "=" * 70)
     print("K3 — kill criterion: does too much traffic reach a language model?")
     print(f"     {no_model:.1%} settled without a model "
           f"({settled/wm.n:.1%} by rules, {escalated/wm.n:.1%} to a human)")
-    print(f"     {pending/wm.n:.1%} would reach C4 stage 2")
+    print(f"     {consulted/wm.n:.1%} reached C4 stage 2")
     if no_model < K3_THRESHOLD:
         print("\n     *** K3 HAS FIRED *** too much traffic reaches the model.")
     else:

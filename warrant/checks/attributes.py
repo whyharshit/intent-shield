@@ -35,6 +35,8 @@ from __future__ import annotations
 import json
 import os
 import re
+import threading
+import time
 from dataclasses import dataclass, field
 from typing import Literal, Protocol
 
@@ -46,6 +48,8 @@ DEFAULT_MODEL = os.environ.get("WARRANT_MODEL", "claude-opus-5")
 MAX_TOKENS = 4096
 EFFORT = "low"          # a bounded classification, not open-ended reasoning
 MAX_LINES_IN_PROMPT = 60
+MAX_TRANSIENT_RETRIES = 3
+RATE_LIMIT_COOLDOWN_S = 45.0
 
 ConstraintVerdict = Literal["satisfied", "violated", "not_determinable"]
 
@@ -196,6 +200,140 @@ class AnthropicProvider:
             self.last_error = "no parsed output"
             return None
         return parsed
+
+
+@dataclass
+class GeminiProvider:
+    """Google Gemini via google-genai, with schema-forced output.
+
+    Supports several comma-separated API keys and rotates between them. That is
+    not redundancy for its own sake: the free tier caps requests per minute, a
+    full evaluation is ~2,400 calls, and rotating across N keys multiplies the
+    ceiling. On a rate-limit error the current key is parked and the next one
+    picks up; when every key is exhausted the call fails, which — like every
+    other failure here — becomes `uncertain` and escalates.
+
+    Unlike Claude, Gemini still accepts `temperature`, so this provider sets it
+    to 0 as 03 §3.1 originally intended.
+    """
+
+    model: str = ""
+    api_keys: tuple[str, ...] = ()
+    name: str = "gemini"
+    last_error: str | None = None
+    _clients: list = field(default_factory=list)
+    _cursor: int = 0
+    _cooldown_until: dict = field(default_factory=dict)
+    _lock: object = field(default_factory=threading.Lock)
+
+    def __post_init__(self):
+        self.model = self.model or os.environ.get(
+            "WARRANT_GEMINI_MODEL", "gemini-flash-lite-latest"
+        )
+        if not self.api_keys:
+            raw = os.environ.get("GEMINI_API_KEY", "")
+            self.api_keys = tuple(k.strip() for k in raw.split(",") if k.strip())
+
+    def _next_key(self) -> int | None:
+        """Round-robin over keys that are not in cooldown. Thread-safe."""
+        now = time.monotonic()
+        with self._lock:
+            for _ in range(len(self._clients)):
+                idx = self._cursor % len(self._clients)
+                self._cursor += 1
+                if self._cooldown_until.get(idx, 0.0) <= now:
+                    return idx
+        return None
+
+    def _park(self, idx: int, seconds: float = RATE_LIMIT_COOLDOWN_S) -> None:
+        with self._lock:
+            self._cooldown_until[idx] = time.monotonic() + seconds
+
+    def _redact(self, text: str) -> str:
+        """Never let a key reach a log line or an audit record."""
+        for k in self.api_keys:
+            text = text.replace(k, "<redacted>")
+        return text
+
+    def _ensure_clients(self) -> bool:
+        if self._clients:
+            return True
+        if not self.api_keys:
+            self.last_error = "GEMINI_API_KEY not set"
+            return False
+        try:
+            from google import genai
+        except ImportError:
+            self.last_error = "google-genai not installed"
+            return False
+        try:
+            self._clients = [genai.Client(api_key=k) for k in self.api_keys]
+        except Exception as exc:
+            self.last_error = self._redact(f"client init failed: {exc}")
+            return False
+        return True
+
+    def assess(self, system: str, user: str, schema: type[BaseModel]):
+        if not self._ensure_clients():
+            return None
+        from google.genai import types
+
+        config = types.GenerateContentConfig(
+            system_instruction=system,
+            response_mime_type="application/json",
+            response_schema=schema,
+            temperature=0,
+        )
+
+        # Enough attempts to cycle every key plus retries for transient faults.
+        # A 503 UNAVAILABLE showed up within the first dozen live calls; over a
+        # ~2,400-call evaluation, treating one as a permanent failure would
+        # scatter spurious escalations through the results.
+        for attempt in range(len(self._clients) + MAX_TRANSIENT_RETRIES):
+            idx = self._next_key()
+            if idx is None:
+                # every key is cooling down; wait for the soonest to come back
+                with self._lock:
+                    soonest = min(self._cooldown_until.values(), default=0.0)
+                wait = max(0.0, min(soonest - time.monotonic(), RATE_LIMIT_COOLDOWN_S))
+                if wait <= 0 or attempt >= len(self._clients) + MAX_TRANSIENT_RETRIES - 1:
+                    self.last_error = f"all {len(self._clients)} key(s) rate-limited"
+                    return None
+                time.sleep(wait)
+                continue
+            try:
+                response = self._clients[idx].models.generate_content(
+                    model=self.model, contents=user, config=config
+                )
+            except Exception as exc:
+                message = self._redact(str(exc))
+                upper = message.upper()
+                if "429" in message or "RESOURCE_EXHAUSTED" in upper:
+                    # Park rather than retire: free-tier quotas are per-minute,
+                    # so a key that is exhausted now is usable again shortly.
+                    self._park(idx)
+                    self.last_error = f"key {idx + 1} rate-limited"
+                    continue
+                if any(s in message for s in ("503", "500", "502", "504")) or \
+                        "UNAVAILABLE" in upper or "DEADLINE" in upper:
+                    self.last_error = f"transient: {message[:120]}"
+                    time.sleep(min(2 ** attempt, 8))
+                    continue
+                self.last_error = f"{type(exc).__name__}: {message[:200]}"
+                return None
+
+            parsed = getattr(response, "parsed", None)
+            if parsed is None:
+                self.last_error = "no parsed output"
+                return None
+            return parsed
+
+        return None
+
+    def reset_rate_limits(self) -> None:
+        """Clear cooldowns — useful between eval runs."""
+        with self._lock:
+            self._cooldown_until.clear()
 
 
 @dataclass
@@ -402,8 +540,30 @@ class AttributeChecker:
 
 
 def _default_provider() -> LLMProvider:
-    """Anthropic when credentials resolve, otherwise the fail-closed stand-in."""
-    provider = AnthropicProvider()
-    if provider._ensure_client() is None:
-        return UnavailableProvider(last_error=provider.last_error or "no credentials")
-    return provider
+    """Pick a provider from the environment, or fail closed.
+
+    `WARRANT_PROVIDER` selects explicitly; `auto` (the default) takes whichever
+    key is configured, preferring Gemini. If nothing resolves, the stand-in is
+    returned and every assessment escalates — never allows.
+    """
+    choice = os.environ.get("WARRANT_PROVIDER", "auto").strip().lower()
+
+    def _gemini() -> LLMProvider | None:
+        provider = GeminiProvider()
+        return provider if provider._ensure_clients() else None
+
+    def _anthropic() -> LLMProvider | None:
+        provider = AnthropicProvider(
+            model=os.environ.get("WARRANT_ANTHROPIC_MODEL", DEFAULT_MODEL)
+        )
+        return provider if provider._ensure_client() is not None else None
+
+    if choice == "gemini":
+        return _gemini() or UnavailableProvider(last_error="gemini unavailable")
+    if choice == "anthropic":
+        return _anthropic() or UnavailableProvider(last_error="anthropic unavailable")
+
+    return _gemini() or _anthropic() or UnavailableProvider(
+        last_error="no LLM credentials configured (set GEMINI_API_KEY "
+                   "or ANTHROPIC_API_KEY in .env)"
+    )

@@ -14,10 +14,15 @@ sentence-transformers>=2.7
 numpy>=1.26
 scikit-learn>=1.4
 
-# LLM provider, kept behind an interface.
-# 1.x is required: the semantic checker uses `client.messages.parse()` for
-# schema-forced structured output, which does not exist in 0.x.
+# LLM providers, both behind the same interface (warrant/checks/attributes.py).
+# Either is sufficient; running both lets the eval report a cross-provider
+# agreement rate.
+#
+# anthropic 1.x is required: the semantic checker uses `client.messages.parse()`
+# for schema-forced structured output, which does not exist in 0.x.
 anthropic>=1.4
+google-genai>=2.0
+python-dotenv>=1.0
 
 # UI and eval
 streamlit>=1.33
