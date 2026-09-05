@@ -42,6 +42,7 @@ from typing import Literal, Protocol
 
 from pydantic import BaseModel, Field, ValidationError
 
+from warrant.checks.cache import ResponseCache, cache_key
 from warrant.models import Cart, CheckResult, IntentMandate
 
 DEFAULT_MODEL = os.environ.get("WARRANT_MODEL", "claude-opus-5")
@@ -435,8 +436,13 @@ Return exactly {len(constraints)} findings, one per constraint, in order."""
 
 
 class AttributeChecker:
-    def __init__(self, provider: LLMProvider | None = None):
+    def __init__(
+        self,
+        provider: LLMProvider | None = None,
+        cache: ResponseCache | None = None,
+    ):
         self.provider = provider or _default_provider()
+        self.cache = cache if cache is not None else ResponseCache()
 
     def run(self, mandate: IntentMandate, cart: Cart) -> AttributeOutcome:
         constraints = collect_constraints(mandate)
@@ -453,7 +459,19 @@ class AttributeChecker:
             )
 
         prompt = build_prompt(mandate, cart, constraints)
+        model_name = getattr(self.provider, "model", self.provider.name)
+        key = cache_key(str(model_name), SYSTEM_PROMPT, prompt)
+
+        cached = self.cache.get(key)
+        if cached is not None:
+            try:
+                return self._to_checks(constraints, AttributeAssessment(**cached))
+            except ValidationError:
+                pass  # a stale entry from an older schema; ask again
+
         parsed = self.provider.assess(SYSTEM_PROMPT, prompt, AttributeAssessment)
+        if parsed is not None:
+            self.cache.put(key, parsed.model_dump(), note=str(model_name))
 
         if parsed is None:
             reason = getattr(self.provider, "last_error", "provider returned nothing")

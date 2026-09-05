@@ -17,6 +17,10 @@ archive*.zip
 # Downloaded model weights (~88MB). `make setup` fetches them on first use;
 # the mapper degrades to keywords and says so if they are unavailable.
 data/cache/
+# ... except the semantic-checker response cache, which IS committed: it is
+# what lets `make eval` reproduce the reported numbers on a clean clone with
+# no API key, and what makes the sealed test run literally run once.
+!data/cache/semantic_responses.jsonl
 
 # Generated.
 #
