@@ -14,7 +14,7 @@ SEED   ?= 1337
 SIZE   ?= 800
 
 .DEFAULT_GOAL := help
-.PHONY: help setup dataset catalog pairs baseline categories rules report eval test lint clean
+.PHONY: help setup dataset catalog pairs baseline categories rules warm adversarial ui sealed report eval test lint clean
 
 help:
 	@echo "setup     install dependencies"
