@@ -85,19 +85,64 @@ def test_titles_look_like_real_products(items) -> None:
     assert multiword / len(items) > 0.8
 
 
-def test_alcohol_is_present_and_correctly_categorised(items) -> None:
-    """The headline demo depends on this: a real whisky, priced under a
-    Rs 2,000 grocery cap, that must map to a denied category."""
+def test_alcohol_is_present_and_restricted(items) -> None:
     tax = default_taxonomy()
     alcohol = [i for i in items if i.root == "alcohol"]
     assert len(alcohol) >= 50
     assert all(tax.is_restricted(i.category) for i in alcohol)
 
-    whiskies = [
-        i for i in items
-        if i.category == "whisky" and 150_000 <= i.price_paise <= 200_000
-    ]
-    assert whiskies, "no whisky in the Rs 1,500-2,000 band for the demo case"
+
+def test_the_whisky_leaf_actually_contains_whisky(items) -> None:
+    """Regression guard for the source's catch-all label.
+
+    4,202 rows in the excise list are labelled "IMFL Whisky" and include sake,
+    cognac and sauvignon blanc. An earlier build filled the whisky leaf with
+    Italian wine — Ricossa Gavi, Te Mata Gamay Noir — and the test at the time
+    only asserted that whisky *existed*, so it passed. Assert the contents.
+    """
+    whiskies = [i for i in items if i.category == "whisky"]
+    assert whiskies
+    for i in whiskies:
+        assert re.search(
+            r"whisk(y|ey)|scotch|bourbon|single malt|blended malt", i.title, re.I
+        ), f"not a whisky: {i.title}"
+
+
+def test_the_headline_demo_cart_is_buildable(items) -> None:
+    """A cart of whisky totalling just under a Rs 2,000 grocery cap.
+
+    This is the case the whole submission opens on, so the catalog has to be
+    able to express it. One bottle or several — what matters is that a total
+    lands under the cap while every line is alcohol.
+    """
+    cheap = sorted(
+        (i for i in items if i.root == "alcohol" and i.price_paise < 200_000),
+        key=lambda i: -i.price_paise,
+    )
+    assert cheap, "no alcohol under Rs 2,000 — the demo cart cannot be built"
+
+    cap, total, lines = 200_000, 0, 0
+    for i in cheap:
+        if total + i.price_paise < cap:
+            total += i.price_paise
+            lines += 1
+    assert total >= 150_000, f"best alcohol cart is only Rs {total/100:,.0f}"
+    assert lines >= 1
+
+
+def test_price_stratification_spans_each_leaf(items) -> None:
+    """Sampling must preserve the real price range, not cluster.
+
+    A leaf whose SKUs all sit in one narrow band makes amount-ceiling checks
+    trivial and unrepresentative.
+    """
+    from collections import defaultdict
+
+    by_leaf = defaultdict(list)
+    for i in items:
+        by_leaf[i.category].append(i.price_paise)
+    wide = [c for c, p in by_leaf.items() if len(p) >= 8 and max(p) >= 4 * min(p)]
+    assert len(wide) >= 10, "price ranges look collapsed across leaves"
 
 
 def test_no_alcohol_leaked_into_grocery_roots(items) -> None:

@@ -85,6 +85,15 @@ groceries mandate the demo lives in. `QUOTAS` in `catalog.py` rebalances toward
 that world while keeping enough alcohol, apparel, electronics and pharma for
 violations to be injected from.
 
+**D-010a · Sampling is stratified by price and balanced across leaves.**
+Taking the first N in hash order sampled price randomly. On a quota of 15 it
+drew whiskies at Rs 28 and Rs 32,550 and nothing in between — the headline
+demo needs a cart landing just under Rs 2,000, and the catalog could not
+express it. Selection now shares each root's quota evenly across the leaves
+that have stock, then systematically samples each leaf across its real price
+range. Alcohol went from 59 wines and 1 beer to an even spread over all eight
+leaves; leaf coverage rose from 57 to 62.
+
 **D-010 · Selection is by stable hash, not `random.shuffle`.**
 `sha256(seed:sku)` sorts identically across Python versions and platforms. The
 reproducibility contract asks a reviewer to change the seed and re-run; that
@@ -187,10 +196,17 @@ The A-Z dataset has no prescription flag, so the split is keyword-driven and
 wrong at the margin — an IV infusion currently lands in `otc_medicine`. Both
 leaves sit under a restricted root, so the root-level check is unaffected.
 
-**L-003 · The source's own liquor categories are unreliable.**
+**L-003 · The source's own liquor categories are unreliable, and this bit.**
 4,202 rows are labelled "IMFL Whisky" and include sake, cognac and sauvignon
-blanc. The loader classifies on product name first and uses the source label
-only as a fallback. Root-level `alcohol` is unaffected either way.
+blanc. The first build inherited that label and filled the whisky leaf with
+Italian wine — Ricossa Gavi, Te Mata Gamay Noir. `whisky` is now assigned only
+on positive evidence in the product name; "IMFL Whisky" was removed from the
+fallback map entirely and unmatched rows are dropped. Root-level `alcohol` was
+never affected, so the denied-category check was always correct — but the demo
+narrative would have shown a wine labelled whisky on stage.
+
+The test that should have caught it asserted whisky *existed*, not that it was
+whisky, so it passed throughout. Replaced with a contents assertion.
 
 **L-004 · Six taxonomy leaves have no SKUs.**
 Tobacco (no source obtained), footwear (D-004), men's apparel and bags (the

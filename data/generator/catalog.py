@@ -304,7 +304,12 @@ def load_bigbasket() -> Iterator[CatalogItem]:
 LIQUOR_NAME_RULES: list[tuple[str, str]] = [
     (r"sauvignon|cabernet|merlot|chardonnay|pinot|shiraz|syrah|riesling|prosecco|"
      r"champagne|\bsake\b|chianti|rioja|malbec|zinfandel|tempranillo|\brose\b|"
-     r"pinotage|verdejo|grenache|\bdoc\b|\bwine\b|vino|chablis", "wine"),
+     r"pinotage|verdejo|grenache|\bdocg?\b|\bwine\b|vino|chablis|gavi|negroamaro|"
+     r"gamay|barbera|nebbiolo|sangiovese|primitivo|montepulciano|valpolicella|"
+     r"soave|brunello|barolo|amarone|viognier|semillon|gruner|albarino|vermentino|"
+     r"\bigt\b|\bdoc\b|\bavo?c\b|chenin|carmenere|tannat|bordeaux|burgundy|"
+     r"rioja|ribera|priorat|marlborough|estate|chateau|domaine|bodega|cuvee|"
+     r"\bbrut\b|spumante|cava|moscato|\bport\b|sherry", "wine"),
     (r"cognac|brandy|armagnac|\bvsop\b|\bxo\b", "brandy"),
     (r"tequila|mezcal|liqueur|triple sec|sambuca|baileys|amaretto|mead|cider|vermouth", "liqueur"),
     (r"\brum\b|old monk|bacardi", "rum"),
@@ -314,8 +319,12 @@ LIQUOR_NAME_RULES: list[tuple[str, str]] = [
     (r"whisky|whiskey|scotch|bourbon|single malt|blended malt", "whisky"),
 ]
 
+# The source label is a fallback only, and "IMFL Whisky" is deliberately absent.
+# 4,202 rows carry that label and include sake, cognac and sauvignon blanc; a row
+# only becomes `whisky` if its own name says so. Rows that reach neither the name
+# rules nor this map are dropped -- 8,180 available against a quota of 115 means
+# precision costs nothing. See DECISIONS.md L-003.
 LIQUOR_CAT_MAP = {
-    "IMFL Whisky": "whisky",
     "Wine": "wine",
     "Beer": "beer",
     "Brandy": "brandy",
@@ -510,14 +519,15 @@ def load_pharma() -> Iterator[CatalogItem]:
 SWIGGY_RULES: list[tuple[str, str]] = [
     # a "+" almost always means a combo meal, not the first item named in it
     (r"\+|combo|thali|meal for|family pack", "main_course"),
-    (r"ice cream|gulab jamun|rasgulla|brownie|halwa|kheer|dessert|sundae|falooda|"
-     r"cheesecake|pastry|mousse|jalebi|rasmalai", "desserts_sweets"),
+    (r"ice cream|gulab jamun|rasgulla|brownie|halwa|\bkheer\b|dessert|sundae|"
+     r"falooda|cheesecake|pastry|mousse|jalebi|rasmalai|\bcake\b|payasam", "desserts_sweets"),
     (r"lassi|shake|cold coffee|mojito|mocktail|smoothie|iced tea|soda|juice|"
      r"cola|water bottle|buttermilk|chaas", "beverages_restaurant"),
     (r"roti|naan|paratha|kulcha|chapati|pulao|\bpulav\b|steamed rice|jeera rice|"
      r"plain rice|tandoori roti|rumali", "breads_rice"),
     (r"burger|pizza|\broll\b|momo|sandwich|fries|samosa|tikka|starter|wrap|"
      r"nugget|pakoda|pakora|spring roll|garlic bread|kebab|manchurian", "starters_snacks"),
+    (r"\bsalad\b|raita|papad", "starters_snacks"),
     (r"biryani|curry|masala|gravy|thali|\bbowl\b|butter chicken|paneer|dal |"
      r"korma|handi|meal|combo|rice bowl", "main_course"),
 ]
@@ -609,23 +619,82 @@ def collect(taxonomy: Taxonomy | None = None) -> tuple[list[CatalogItem], Counte
     return items, stats
 
 
+def _stratify_by_price(pool: list[CatalogItem], want: int, seed: int) -> list[CatalogItem]:
+    """Systematic sample across the leaf's price range.
+
+    Taking the first `want` items in hash order samples price randomly, which on
+    a small quota reliably leaves gaps: an early build drew 22 whiskies and not
+    one fell in the Rs 1,500-2,000 band the headline demo needs. Sorting by
+    price and stepping through at a fixed stride guarantees the catalog spans
+    each leaf's real price range, which is also what makes an amount-ceiling
+    check interesting to test.
+    """
+    if want >= len(pool):
+        return list(pool)
+    ordered = sorted(pool, key=lambda i: (i.price_paise, i.sku))
+    stride = len(ordered) / want
+    offset = int(_rank(ordered[0].sku, seed)[:8], 16) % max(1, int(stride))
+    picked = [ordered[min(len(ordered) - 1, int(k * stride) + offset)] for k in range(want)]
+    # the offset can collide at the tail; backfill deterministically
+    seen = {i.sku for i in picked}
+    if len(seen) < want:
+        for it in ordered:
+            if it.sku not in seen:
+                picked.append(it)
+                seen.add(it.sku)
+            if len(seen) == want:
+                break
+    return list({i.sku: i for i in picked}.values())
+
+
 def build(seed: int = DEFAULT_SEED, target: int = TARGET_SIZE) -> list[CatalogItem]:
-    """Select a quota-balanced, deterministic catalog."""
+    """Select a quota-balanced, deterministic catalog.
+
+    Two levels of balancing. Across roots, `QUOTAS` overrides the source mix.
+    Within a root, the quota is shared evenly across the leaves that have stock,
+    so a leaf isn't silently absent because another one dominates the source —
+    an early build put 59 wines and 1 beer in the alcohol root.
+    """
     tax = default_taxonomy()
     items, _ = collect(tax)
 
-    by_root: dict[str, list[CatalogItem]] = defaultdict(list)
+    by_leaf: dict[str, dict[str, list[CatalogItem]]] = defaultdict(lambda: defaultdict(list))
     for it in items:
-        by_root[it.root].append(it)
+        by_leaf[it.root][it.category].append(it)
 
     scale = target / sum(QUOTAS.values())
     chosen: list[CatalogItem] = []
-    for root, quota in QUOTAS.items():
-        pool = sorted(by_root.get(root, []), key=lambda i: _rank(i.sku, seed))
-        want = max(1, round(quota * scale))
-        chosen.extend(pool[:want])
 
-    chosen.sort(key=lambda i: (i.root, i.category, i.title))
+    for root, quota in QUOTAS.items():
+        leaves = by_leaf.get(root, {})
+        if not leaves:
+            continue
+        want = max(1, round(quota * scale))
+
+        # even share per leaf, remainder to the leaves with the most stock
+        names = sorted(leaves, key=lambda c: (-len(leaves[c]), c))
+        base, extra = divmod(want, len(names))
+        allocation = {c: base + (1 if i < extra else 0) for i, c in enumerate(names)}
+
+        # a leaf that can't fill its share returns the slack to the others
+        slack = 0
+        for c in names:
+            short = allocation[c] - len(leaves[c])
+            if short > 0:
+                allocation[c] = len(leaves[c])
+                slack += short
+        for c in names:
+            if slack <= 0:
+                break
+            room = len(leaves[c]) - allocation[c]
+            take = min(room, slack)
+            allocation[c] += take
+            slack -= take
+
+        for c in names:
+            chosen.extend(_stratify_by_price(leaves[c], allocation[c], seed))
+
+    chosen.sort(key=lambda i: (i.root, i.category, i.price_paise, i.title))
     return chosen
 
 
