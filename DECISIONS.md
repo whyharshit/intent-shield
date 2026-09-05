@@ -23,8 +23,13 @@ MERCHANT_OUT_OF_SCOPE, 0% on the other ten types. That is the premise of the
 project, measured rather than assumed. Asserted in `tests/test_baseline.py`, so
 a dataset change that quietly makes the baseline look good will fail the suite.
 
-K2 and K3 become testable when the category mapper and the deterministic
-checker exist.
+**K2 tested, has not fired.** Category mapping reaches 82.3% root accuracy on a
+held-out 40% of the catalog, with 7.3% dangerous errors and 10.4% safe
+abstentions. Alcohol detection is 100% with zero leaks into non-alcohol roots.
+
+**K3 tested, has not fired.** 80.4% of traffic is settled without a language
+model - 40.6% by rules, 39.8% escalated to a human. 19.6% would reach C4
+stage 2.
 
 ---
 
@@ -312,3 +317,98 @@ Every injected violation has a clear correct answer, so the generated set
 cannot measure how well the system handles genuine ambiguity. That is what the
 40 hand-written adversarial near-misses are for, and why several of them expect
 ESCALATE rather than REFUSE. Not yet written.
+
+---
+
+## Milestone 4 - category mapping and the deterministic checker
+
+**D-028 - P-001 resolved: category mapping runs *before* the rules.**
+03 SS1 draws C3 ahead of C4, but "no line item maps to a denied category" cannot
+be evaluated before the mapping exists. Mapping is now an enrichment step ahead
+of the rules. It does not violate "deterministic first, model last" - that rule
+is about the *language model*, and an embedding lookup is not one. The ordering
+in the diagram was an oversight, not a decision.
+
+**D-029 - The mapper reads the product title, never `merchant_category`.**
+That field carries the generator's ground-truth label, so consulting it would
+make the reported accuracy meaningless. Thresholds were chosen by sweeping on a
+60% split of the catalog and reading the held-out 40% once.
+
+**D-030 - Leaf centroids are blended with real product titles, fitted on the
+train split only.**
+A hand-written category description and a product title do not occupy the same
+region of embedding space. "Consumer electronics, headphones and accessories" is
+prose; "Boult X1 with Dual Dynamic Drivers, BoomX Rich Bass, IPX5" is a spec
+dump, and scoring one against the other gave cosines near 0.15 - most of the
+electronics catalog went to UNKNOWN. Blending a few labelled titles per leaf
+moved held-out root accuracy from 65.9% to 82.3%.
+
+**D-031 - Out-of-scope escalates; explicitly-denied refuses.**
+Failing hard on `allowed_scope` refused 494 conforming carts on train. The
+causes were near-miss mappings between near-duplicate leaves - "Pineapple Juice"
+to `beverages_soft` instead of `beverages_restaurant`, "Mini Samosa" to
+`starters_snacks` instead of `snacks_namkeen`. Those are the same product under
+a different leaf, and a customer who wrote "groceries" would call every one of
+them in scope. "Not in the allowed list" rests entirely on a probabilistic
+mapping and is a weaker signal than "explicitly denied", so it now escalates.
+False positives fell 494 -> 159 and false-positive cost from Rs 33,492 to
+Rs 12,630 per 1,000 transactions, with no loss of recall.
+
+The exception is age-gated goods: alcohol on a mandate that never allowed any
+refuses outright, whether or not the customer thought to write "no alcohol".
+
+**D-032 - Uncertainty is materiality-gated, and the threshold is derived.**
+Per-line uncertainty compounds: at ~10% unmappable per line and 4.2 lines per
+cart, most carts contain at least one, which drove escalation to 44%. An
+escalation costs about Rs 12 of friction, and an unmappable line hides a real
+violation about 8% of the time on train, so asking is worth it above
+Rs 12 / 0.08 = Rs 150. Gating applies **only** to lines that could not be
+categorised - a line that *was* mapped into a denied category refuses however
+cheap it is, or a 90 ml bottle of whisky would slip through.
+
+This is a stand-in for C5. The expected-cost policy should subsume it, weighing
+the amount at risk directly rather than through a fixed threshold.
+
+**D-033 - K3 measures traffic reaching a language model, not traffic settled by
+rules.**
+05 phrases K3 as "every transaction hitting an LLM means unusable latency and
+cost". An escalation goes to a human, not a model, so it is not LLM traffic. The
+first version of the report counted escalations against K3 and made it look
+close to firing at 38.9%, when the number K3 actually asks about was 80.4%.
+
+---
+
+## Measured limitations - Milestone 4
+
+**L-009 - A keyword fast path ahead of the embeddings dropped accuracy to 63.9%.**
+Running general keywords first inverted 03 SS3.2 and short-circuited 79% of items
+onto a path that cannot tell an ingredient from a category. "Orange Juice"
+mapped to `fresh_fruits`, "tablet" to `mobiles`, and - worst - `insurance`
+carried the keyword "premium", so *Tuborg Super Premium Danish Beer* mapped to
+`insurance` and would have passed a no-alcohol mandate. Keywords now name
+product types only, and general keywords no longer pre-empt the embedding.
+The docs were right and the shortcut was wrong.
+
+**L-010 - Escalation is 39.8%, which is too high to ship.**
+Every uncertainty escalates because C5 does not exist yet. The expected-cost
+policy should weigh the amount at risk and bring this down. Reported as an
+upper bound rather than a result.
+
+**L-011 - The taxonomy contains near-duplicate leaves across roots.**
+`beverages_soft` vs `beverages_restaurant`, `chocolates_candy` vs
+`desserts_sweets`, `snacks_namkeen` vs `starters_snacks`. A juice is the same
+product whether a supermarket or a restaurant sold it, and the mapper cannot
+recover a distinction that only exists in how the item was sourced. This is the
+main driver of the remaining 7.3% dangerous-error rate.
+
+**L-012 - Category accuracy is per item; carts compound it.**
+82.3% per line is not 82.3% per cart. At 4.2 lines per cart, a cart clears
+cleanly only about half the time. Per-cart accuracy is the number that matters
+operationally and it is much lower than the per-item figure a reviewer would
+expect from the mapping table.
+
+**L-013 - Three violation types are currently caught by accident.**
+BRAND_EXCLUSION, QUANTITY_ANOMALY and UNAUTHORIZED_SUBSTITUTION are marked
+`model` in the taxonomy and the semantic checker does not exist yet. They score
+59-75% only because uncertainty elsewhere escalates the cart. Those numbers will
+move once C4 stage 2 lands and should not be read as rule-layer performance.

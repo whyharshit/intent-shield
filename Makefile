@@ -14,7 +14,7 @@ SEED   ?= 1337
 SIZE   ?= 800
 
 .DEFAULT_GOAL := help
-.PHONY: help setup dataset catalog pairs baseline report eval test lint clean
+.PHONY: help setup dataset catalog pairs baseline categories rules report eval test lint clean
 
 help:
 	@echo "setup     install dependencies"
@@ -45,6 +45,12 @@ pairs:
 
 baseline:
 	$(PYTHON) eval/run_baseline.py --seed $(SEED)
+
+categories:
+	$(PYTHON) eval/run_categories.py
+
+rules:
+	$(PYTHON) eval/run_rules.py --seed $(SEED)
 
 report:
 	$(PYTHON) data/generator/catalog.py --report --seed $(SEED)

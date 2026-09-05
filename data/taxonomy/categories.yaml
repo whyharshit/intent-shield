@@ -24,47 +24,47 @@ roots:
       snacks_namkeen:
         label: Snacks & Namkeen
         description: Indian savoury snacks, chips, namkeen, bhujia, mixture, wafers
-        keywords: [namkeen, bhujia, chips, wafer, mixture, sev, chivda, papad, snack]
+        keywords: [namkeen, bhujia, chips, wafers, mixture, sev, chivda, papad, corn snack, nachos]
       biscuits_cookies:
         label: Biscuits & Cookies
         description: Biscuits, cookies, crackers, rusk and tea-time baked snacks
-        keywords: [biscuit, cookie, cracker, rusk, marie, digestive]
+        keywords: [biscuit, cookies, cracker, rusk, marie, digestive biscuit]
       chocolates_candy:
         label: Chocolates & Candy
         description: Chocolate bars, candy, toffee, mithai and confectionery
-        keywords: [chocolate, candy, toffee, lollipop, mithai, confection, eclair]
+        keywords: [chocolate, candy, toffee, lollipop, mithai, eclair, chocolate bar]
       breakfast_cereal:
         label: Breakfast & Cereal
         description: Breakfast cereal, oats, cornflakes, muesli, poha and upma mixes
-        keywords: [cereal, oats, cornflake, muesli, poha, upma, breakfast, granola]
+        keywords: [breakfast cereal, cornflakes, muesli, granola, oats, porridge, poha, upma mix]
       noodles_pasta:
         label: Noodles & Pasta
         description: Instant noodles, pasta, vermicelli, macaroni and soup mixes
-        keywords: [noodle, pasta, vermicelli, macaroni, maggi, soup, spaghetti]
+        keywords: [noodles, pasta, vermicelli, macaroni, spaghetti, instant noodles]
       sauces_spreads:
         label: Sauces & Spreads
         description: Ketchup, sauces, jam, honey, peanut butter, pickle and chutney
-        keywords: [ketchup, sauce, jam, honey, spread, pickle, achar, chutney, mayonnaise]
+        keywords: [ketchup, sauce, jam, honey, peanut butter, pickle, achar, chutney, mayonnaise, spread]
       dairy_eggs:
         label: Dairy & Eggs
         description: Milk, curd, paneer, butter, cheese, ghee and eggs
-        keywords: [milk, curd, dahi, paneer, butter, cheese, ghee, egg, yoghurt, cream]
+        keywords: [milk, curd, dahi, paneer, butter, cheese, yoghurt, yogurt, shrikhand, eggs, fresh cream, buttermilk]
       bakery_cakes:
         label: Bakery & Cakes
         description: Bread, buns, pav, cakes, pastries and bakery items
-        keywords: [bread, bun, pav, cake, pastry, croissant, muffin, bakery]
+        keywords: [bread, pav, buns, cake, pastry, croissant, muffin, brownie, rusk toast]
       tea_coffee:
         label: Tea & Coffee
         description: Tea leaves, tea bags, instant coffee, filter coffee and green tea
-        keywords: [tea, chai, coffee, green tea, teabag, darjeeling, assam, decoction]
+        keywords: [tea, chai, green tea, tea bags, instant coffee, ground coffee, filter coffee]
       beverages_soft:
         label: Soft Drinks & Juices
         description: Non-alcoholic drinks, juices, soft drinks, energy and health drinks
-        keywords: [juice, soft drink, cola, soda, squash, energy drink, health drink, water]
+        keywords: [juice, soft drink, cola, aerated drink, squash, energy drink, health drink, packaged water, coconut water]
       meat_fish:
         label: Meat, Poultry & Seafood
         description: Fresh and frozen chicken, mutton, fish and seafood
-        keywords: [chicken, mutton, fish, prawn, seafood, meat, poultry, lamb]
+        keywords: [fresh chicken, fresh mutton, fresh fish, prawns, seafood, marinated meat, chicken sausage, lamb]
 
   produce:
     label: Fresh Produce
@@ -73,15 +73,15 @@ roots:
       fresh_vegetables:
         label: Fresh Vegetables
         description: Loose and packed fresh vegetables including onion, potato, tomato
-        keywords: [onion, potato, tomato, brinjal, bhindi, gourd, cabbage, cauliflower, vegetable]
+        keywords: [fresh vegetable, brinjal, bhindi, okra, gourd, cabbage, cauliflower, capsicum, radish, spinach bunch]
       fresh_fruits:
         label: Fresh Fruits
         description: Fresh seasonal and imported fruit
-        keywords: [banana, apple, mango, orange, grape, papaya, guava, pomegranate, fruit]
+        keywords: [fresh fruit, seasonal fruit, banana, papaya, guava, pomegranate, watermelon, muskmelon]
       herbs_leafy:
         label: Herbs & Leafy Greens
         description: Coriander, mint, curry leaves, spinach and other leafy greens
-        keywords: [coriander, dhania, mint, pudina, curry leaf, spinach, palak, methi, leafy]
+        keywords: [coriander leaves, curry leaves, mint leaves, pudina, palak, methi leaves, leafy greens, spring onion]
 
   staples:
     label: Staples
@@ -90,31 +90,31 @@ roots:
       atta_flour:
         label: Atta & Flour
         description: Wheat atta, maida, besan, rava, sooji and other milled flour
-        keywords: [atta, flour, maida, besan, rava, sooji, chakki, multigrain]
+        keywords: [atta, flour, maida, besan, rava, sooji, chakki atta]
       rice_grains:
         label: Rice & Other Grains
         description: Basmati and non-basmati rice, poha, millets and other grains
-        keywords: [rice, basmati, sona masoori, millet, ragi, bajra, jowar, quinoa]
+        keywords: [rice, basmati, sona masoori, ragi, bajra, jowar, quinoa, whole grain]
       dals_pulses:
         label: Dals & Pulses
         description: Toor, moong, chana, urad and masoor dal, rajma and chhole
-        keywords: [dal, daal, toor, arhar, moong, chana, urad, masoor, rajma, chhole, pulse]
+        keywords: [dal, toor dal, moong dal, chana dal, urad dal, masoor dal, rajma, chhole, pulses]
       edible_oil:
         label: Edible Oils & Ghee
         description: Sunflower, mustard, groundnut, coconut and olive cooking oil
-        keywords: [oil, sunflower, mustard, groundnut, refined, sesame, olive oil, vanaspati]
+        keywords: [cooking oil, sunflower oil, mustard oil, groundnut oil, refined oil, sesame oil, olive oil, ghee, vanaspati]
       spices_masala:
         label: Spices & Masala
         description: Whole and ground spices, blended masalas and cooking pastes
-        keywords: [masala, haldi, turmeric, mirch, jeera, dhania, garam masala, spice, powder]
+        keywords: [whole spices, ground spice, garam masala, chilli powder, turmeric powder, haldi powder, coriander powder, sambar masala, curry powder]
       sugar_salt:
         label: Sugar, Jaggery & Salt
         description: Sugar, jaggery, gur, salt and sweeteners
-        keywords: [sugar, jaggery, gur, salt, namak, sweetener, honey sugar, misri]
+        keywords: [sugar, jaggery, gur, salt, namak, sweetener, misri]
       dry_fruits_nuts:
         label: Dry Fruits & Nuts
         description: Almonds, cashews, raisins, dates, walnuts and seeds
-        keywords: [almond, badam, cashew, kaju, raisin, kishmish, date, walnut, pista, nut]
+        keywords: [dry fruit, dry fruits, raisin, kishmish, pista, walnut kernel, cashew nut, roasted nuts, mixed nuts]
 
   personal_care:
     label: Personal Care
@@ -123,11 +123,11 @@ roots:
       skin_care:
         label: Skin Care
         description: Face wash, cream, moisturiser, sunscreen, serum and lotion
-        keywords: [face wash, cream, moisturiser, lotion, sunscreen, serum, scrub, toner]
+        keywords: [face wash, face cream, moisturiser, moisturizer, body lotion, sunscreen, face serum, face scrub, toner]
       hair_care:
         label: Hair Care
         description: Shampoo, conditioner, hair oil, colour and styling products
-        keywords: [shampoo, conditioner, hair oil, hair colour, henna, mehendi, serum hair]
+        keywords: [shampoo, conditioner, hair oil, hair colour, hair serum, henna, mehendi]
       oral_care:
         label: Oral Care
         description: Toothpaste, toothbrush, mouthwash and dental care
@@ -135,7 +135,7 @@ roots:
       bath_body:
         label: Bath & Body
         description: Soap, body wash, talc, handwash and bathing products
-        keywords: [soap, body wash, shower gel, talc, handwash, bathing bar, loofah]
+        keywords: [soap, bathing bar, body wash, shower gel, talc, handwash, loofah]
       fragrance_deodorant:
         label: Fragrance & Deodorant
         description: Perfume, eau de toilette, deodorant, body spray and attar
@@ -204,7 +204,13 @@ roots:
       wine:
         label: Wine
         description: Red, white, rose and sparkling wine, champagne and sake
-        keywords: [wine, merlot, cabernet, sauvignon, chardonnay, shiraz, champagne, prosecco, sake]
+        keywords: [wine, vino, merlot, cabernet, sauvignon, chardonnay, shiraz, syrah,
+                   riesling, champagne, prosecco, sake, chianti, rioja, malbec, zinfandel,
+                   tempranillo, pinotage, pinot, verdejo, grenache, gavi, negroamaro, gamay,
+                   barbera, nebbiolo, sangiovese, primitivo, montepulciano, valpolicella,
+                   soave, brunello, barolo, amarone, viognier, semillon, albarino, vermentino,
+                   carmenere, chenin, tannat, bordeaux, burgundy, chablis, chateau, domaine,
+                   bodega, cuvee, spumante, cava, moscato, sherry, franciacorta, docg]
         restricted: true
       rum:
         label: Rum
@@ -309,7 +315,7 @@ roots:
       mobiles:
         label: Mobile Phones
         description: Smartphones, feature phones and tablets
-        keywords: [smartphone, mobile, phone, iphone, galaxy, redmi, realme, tablet]
+        keywords: [smartphone, mobile phone, feature phone, ipad, galaxy, redmi, realme, oneplus]
       laptops_computers:
         label: Laptops & Computers
         description: Laptops, desktops, chromebooks, monitors and computer hardware
@@ -335,20 +341,20 @@ roots:
       otc_medicine:
         label: Over-the-Counter Medicine
         description: Non-prescription medicine such as painkillers, antacids and cough syrup
-        keywords: [paracetamol, crocin, antacid, cough syrup, balm, ors, digene, disprin]
+        keywords: [paracetamol, antacid, cough syrup, pain balm, ors, lozenges, antiseptic]
       prescription_medicine:
         label: Prescription Medicine
         description: Prescription-only allopathic medicine, tablets, capsules and injections
-        keywords: [tablet, capsule, injection, antibiotic, mg, strip of, prescription]
+        keywords: [tablet, capsule, injection, infusion, syrup, strip of tablets, mg tablet]
         restricted: true
       supplements_vitamins:
         label: Supplements & Vitamins
         description: Vitamins, protein powder, health supplements and nutraceuticals
-        keywords: [vitamin, supplement, protein powder, calcium, zinc, omega, multivitamin]
+        keywords: [multivitamin, protein powder, health supplement, nutraceutical, calcium tablet, vitamin tablet]
       medical_devices:
         label: Medical Devices & First Aid
         description: Thermometers, BP monitors, glucometers, masks and first aid supplies
-        keywords: [thermometer, bp monitor, glucometer, oximeter, bandage, mask, first aid, syringe]
+        keywords: [thermometer, bp monitor, glucometer, oximeter, bandage, first aid, face mask, syringe]
 
   restaurant:
     label: Restaurant & Food Delivery
@@ -357,7 +363,7 @@ roots:
       main_course:
         label: Main Course
         description: Curries, gravies, biryani, rice bowls and main dishes
-        keywords: [curry, gravy, biryani, masala, butter chicken, paneer, thali, bowl]
+        keywords: [biryani, gravy, thali, rice bowl, butter chicken, korma, handi, dal makhani, combo meal]
       starters_snacks:
         label: Starters & Snacks
         description: Starters, tikka, rolls, burgers, pizza, momos and street food
@@ -386,16 +392,16 @@ roots:
       shipping_delivery:
         label: Shipping & Delivery
         description: Delivery charge, express shipping, priority and handling fees
-        keywords: [shipping, delivery charge, express, priority, handling fee, courier]
+        keywords: [express delivery, delivery charge, priority handling, handling fee, shipping charge, courier charge]
       warranty_protection:
         label: Warranty & Protection Plans
         description: Extended warranty, damage protection and service plans
-        keywords: [warranty, protection plan, extended cover, service plan, amc]
+        keywords: [extended warranty, protection plan, damage protection, service plan, amc]
       insurance:
         label: Insurance
         description: Purchase, shipment or device insurance sold at checkout
-        keywords: [insurance, insured, coverage, policy, premium]
+        keywords: [insurance, shipment insurance, device insurance, insurance premium, coverage plan]
       packaging_giftwrap:
         label: Packaging & Gift Wrap
         description: Gift wrapping, gift message and premium packaging charges
-        keywords: [gift wrap, gift packing, packaging charge, gift message, carry bag]
+        keywords: [gift wrap, gift packing, packaging charge, gift message]

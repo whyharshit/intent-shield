@@ -8,7 +8,7 @@
 
 param(
     [Parameter(Position = 0)]
-    [ValidateSet('help', 'setup', 'dataset', 'catalog', 'pairs', 'baseline', 'report', 'sample', 'eval', 'test', 'lint', 'clean')]
+    [ValidateSet('help', 'setup', 'dataset', 'catalog', 'pairs', 'baseline', 'categories', 'rules', 'report', 'sample', 'eval', 'test', 'lint', 'clean')]
     [string]$Target = 'help',
 
     [int]$Seed = 1337,
@@ -42,6 +42,8 @@ switch ($Target) {
         & $py data/generator/make_dataset.py --build --seed $Seed
     }
     'baseline' { & $py eval/run_baseline.py --seed $Seed }
+    'categories' { & $py eval/run_categories.py }
+    'rules' { & $py eval/run_rules.py --seed $Seed }
     'report' { & $py $catalog --report --seed $Seed }
     'sample' { & $py $catalog --sample 40 --seed $Seed }
     'eval' {
