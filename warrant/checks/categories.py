@@ -41,6 +41,7 @@ open and letting everything through as unmatched.
 from __future__ import annotations
 
 import functools
+import os
 import re
 from dataclasses import dataclass
 from pathlib import Path
@@ -237,6 +238,16 @@ class CategoryMapper:
         self._fitted = True
 
     def _try_load_embeddings(self) -> None:
+        # No network in the hot path (03 §4). Without this the loader makes a
+        # HEAD request to huggingface.co on every construction even when the
+        # weights are already cached — which on a restricted network stalls
+        # through five retries and then degrades the mapper. A verification
+        # service must not depend on reaching a model hub to categorise a cart.
+        # Set WARRANT_ALLOW_MODEL_DOWNLOAD=1 for the first fetch.
+        if os.environ.get("WARRANT_ALLOW_MODEL_DOWNLOAD", "") != "1":
+            os.environ.setdefault("HF_HUB_OFFLINE", "1")
+            os.environ.setdefault("TRANSFORMERS_OFFLINE", "1")
+
         try:
             from sentence_transformers import SentenceTransformer
         except ImportError:

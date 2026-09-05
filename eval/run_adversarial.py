@@ -54,7 +54,7 @@ def main() -> None:
 
     for case in cases:
         mandate, cart = case.build()
-        result = verifier.verify(mandate, cart, case.checked_at)
+        result = verifier.verify(mandate, cart, case.checked_at, case.priors())
         outcome = classify(case.expected, result.verdict, case.accept_also)
         outcomes[outcome] += 1
         rows.append((case, result, outcome))

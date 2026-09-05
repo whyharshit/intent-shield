@@ -54,6 +54,17 @@ class AdversarialCase:
     merchant: str = "mrc_bigbasket"
     checked_at: datetime = NOW
     promised_delivery: datetime | None = None
+    shipping_paise: int = 0
+    tax_paise: int = 0
+    prior_approvals: tuple[tuple[int, int], ...] = ()
+    """(days_ago, amount_paise) for earlier approvals against this mandate.
+
+    Added after A38 scored 'unsafe': the case asserts a frequency breach, but
+    without a way to state the earlier order the checker had no history to see,
+    so the case was testing nothing. A test that cannot express its own premise
+    is worse than no test - it reports a hole in the product that is really a
+    hole in the harness.
+    """
     tags: tuple[str, ...] = ()
     accept_also: tuple[Verdict, ...] = ()
     """Verdicts that are also defensible.
@@ -91,12 +102,23 @@ class AdversarialCase:
             merchant_id=self.merchant,
             line_items=items,
             subtotal_paise=subtotal,
-            tax_paise=0,
-            shipping_paise=0,
-            total_paise=subtotal,
+            tax_paise=self.tax_paise,
+            shipping_paise=self.shipping_paise,
+            total_paise=subtotal + self.tax_paise + self.shipping_paise,
             promised_delivery=self.promised_delivery,
         )
         return mandate, cart
+
+    def priors(self):
+        from warrant.checks.deterministic import PriorApproval
+
+        return [
+            PriorApproval(
+                approved_at=self.checked_at - timedelta(days=days),
+                amount_paise=amount,
+            )
+            for days, amount in self.prior_approvals
+        ]
 
 
 def _grocery_hard(cap_rupees: int = 2000, **kw) -> HardConstraints:
@@ -263,6 +285,7 @@ CASES: list[AdversarialCase] = [
         "REFUSE",
         _grocery_hard(500),
         [("Fresho Potato (Loose) 2 kg", 4_800, 10, {})],
+        shipping_paise=4_900,   # Rs 480 of potatoes + Rs 49 shipping = Rs 529
         tags=("arithmetic",),
     ),
     AdversarialCase(
@@ -510,6 +533,7 @@ CASES: list[AdversarialCase] = [
         "Weekly groceries under Rs 1,000.",
         "REFUSE", _grocery_hard(1000),
         [("Fresho Onion (Loose) 1 kg", 5_000, 2, {})],
+        prior_approvals=((2, 40_000),),   # an order two days ago
         tags=("frequency", "state"),
     ),
     AdversarialCase(

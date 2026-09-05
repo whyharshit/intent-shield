@@ -20,11 +20,12 @@ empty deny-set. Both route to escalation.
 
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 
 from warrant.checks.categories import MappedCategory
-from warrant.models import Cart, CheckResult, IntentMandate
+from warrant.models import Cart, CheckResult, IntentMandate, LineItem
 from warrant.taxonomy import UNKNOWN, Taxonomy, default_taxonomy
 
 FREQUENCY_WINDOW_DAYS = {"once": 3650, "daily": 1, "weekly": 7, "monthly": 30}
@@ -53,6 +54,45 @@ FREQUENCY_WINDOW_DAYS = {"once": 3650, "daily": 1, "weekly": 7, "monthly": 30}
 # fixed threshold.
 MATERIAL_SHARE = 0.08
 MATERIAL_FLOOR_PAISE = 15_000  # Rs 150
+
+# Plausible ceilings for one order, by cadence. Deliberately generous: stocking
+# up is normal, and this check escalates rather than refuses. The point is to
+# catch counts no household reading supports, not to police shopping habits.
+UNIT_CAP = {"daily": 3, "weekly": 12, "monthly": 30, "once": 40}
+MASS_CAP_GRAMS = {"daily": 5_000, "weekly": 15_000, "monthly": 40_000, "once": 50_000}
+
+_PACK_RE = re.compile(
+    r"(?<![\w.])(\d+(?:\.\d+)?)\s*"
+    r"(kgs?|gms?|grams?|g|ltrs?|litres?|liters?|l|ml)",
+    re.I,
+)
+_MULTIPACK_RE = re.compile(
+    r"(\d+)\s*[x*]\s*(\d+(?:\.\d+)?)\s*(kgs?|gms?|g|l|ml)", re.I
+)
+_TO_GRAMS = {"kg": 1000.0, "kgs": 1000.0, "g": 1.0, "gm": 1.0, "gms": 1.0,
+             "gram": 1.0, "grams": 1.0, "l": 1000.0, "ltr": 1000.0,
+             "litre": 1000.0, "liter": 1000.0, "ml": 1.0}
+
+
+def _pack_grams(text: str) -> float | None:
+    """Mass or volume of one pack, in grams or millilitres.
+
+    Treats 1 litre as 1 kg. That is wrong for density and irrelevant here — the
+    check is looking for counts an order of magnitude out, not weighing food.
+    Returns None when no quantity can be read, and the check then declines
+    rather than guessing.
+    """
+    if not text:
+        return None
+    multi = _MULTIPACK_RE.search(text)
+    if multi:
+        count, size, unit = multi.groups()
+        return int(count) * float(size) * _TO_GRAMS[unit.lower()]
+    match = _PACK_RE.search(text)
+    if not match:
+        return None
+    size, unit = match.groups()
+    return float(size) * _TO_GRAMS[unit.lower()]
 
 
 def _material(lines, cart: Cart) -> list:
@@ -400,10 +440,83 @@ class DeterministicChecker:
         return _ok("unrequested_add_ons", "no unrequested service or fee lines")
 
     def empty_cart(self, cart: Cart) -> CheckResult:
-        """A degenerate input that must escalate rather than crash or allow."""
+        """Degenerate input that must escalate rather than crash or allow.
+
+        A zero-value cart is as degenerate as an empty one and was missed by
+        the first version: adversarial case A06 (a single item priced at
+        Rs 0) passed every check and was ALLOWed. A free sample and a pricing
+        error look identical from here, and approving a payment authorisation
+        for nothing is not a decision this layer should make silently.
+        """
         if not cart.line_items:
             return _unsure("empty_cart", "cart has no line items")
+        if cart.total_paise <= 0:
+            return _unsure(
+                "empty_cart",
+                f"cart has {len(cart.line_items)} line(s) but totals "
+                f"{_rupees(cart.total_paise)} — a free sample or a pricing error",
+            )
+        zero_lines = [li for li in cart.line_items if li.total_amount_paise <= 0]
+        if zero_lines:
+            return _unsure(
+                "empty_cart",
+                f"{len(zero_lines)} line(s) priced at zero: "
+                f"{', '.join(li.title[:36] for li in zero_lines[:3])}",
+                [li.line_id for li in zero_lines],
+            )
         return _ok("empty_cart", f"{len(cart.line_items)} line item(s)")
+
+    def quantity_sanity(self, mandate: IntentMandate, cart: Cart) -> CheckResult:
+        """Absurd quantities, as a comparison rather than a language judgement.
+
+        04 §2 files V6 QUANTITY_ANOMALY under "LLM + heuristic", but the
+        semantic checker is only consulted when a mandate carries soft
+        constraints — so a plain "weekly groceries under Rs 4,000" mandate had
+        nothing looking at quantity at all. Adversarial case A39 (40 kg of rice
+        on a weekly household mandate, comfortably under the cap) was ALLOWed.
+
+        A count is a number, and "is this count plausible for this cadence" is
+        a comparison. It belongs here, per the governing rule.
+
+        Deliberately loose: this escalates rather than refuses, and only on
+        counts far outside any household reading. Stocking up is normal; the
+        threshold is set where a person would actually raise an eyebrow.
+        """
+        if not cart.line_items:
+            return _skip("quantity_sanity", "empty cart")
+
+        freq = mandate.hard.frequency or "once"
+        unit_cap = UNIT_CAP.get(freq, 40)
+        mass_cap = MASS_CAP_GRAMS.get(freq, 50_000)
+
+        odd: list[tuple[LineItem, str]] = []
+        for li in cart.line_items:
+            if li.quantity > unit_cap:
+                odd.append((li, f"{li.quantity} units"))
+                continue
+            # Unit count alone is not the signal. Adversarial case A39 is eight
+            # units of a 5 kg pack — 40 kg of rice on a weekly household
+            # mandate, which a count-based check reads as an unremarkable 8.
+            per_pack = _pack_grams(li.attributes.get("pack") or li.title)
+            if per_pack is None:
+                continue
+            total = per_pack * li.quantity
+            if total > mass_cap:
+                odd.append((li, f"{total / 1000:.0f} kg/L"))
+
+        if odd:
+            line, amount = max(odd, key=lambda pair: pair[0].quantity)
+            return _unsure(
+                "quantity_sanity",
+                f"{amount} of {line.title[:40]} on a {freq} mandate "
+                f"(plausible ceiling {unit_cap} units / "
+                f"{mass_cap / 1000:.0f} kg)",
+                [li.line_id for li, _ in odd],
+            )
+        return _ok(
+            "quantity_sanity",
+            f"largest line is {max(li.quantity for li in cart.line_items)} units",
+        )
 
     # -- composition -------------------------------------------------------
 
@@ -428,4 +541,5 @@ class DeterministicChecker:
             self.denied_category(mandate, cart, mapped),
             self.allowed_scope(mandate, cart, mapped),
             self.unrequested_add_ons(mandate, cart, mapped),
+            self.quantity_sanity(mandate, cart),
         ])
