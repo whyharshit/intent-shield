@@ -1,0 +1,401 @@
+# Warrant category taxonomy — Indian retail
+#
+# Consumed by:
+#   C3 deterministic checker  — categories_allowed / categories_denied set membership
+#   C4 stage 1 category map   — `description` seeds the embedding centroid,
+#                               `keywords` drives the regex fast path
+#
+# Leaf ids are the constraint vocabulary. They are stable identifiers: once a
+# mandate is signed against a leaf id, renaming it silently changes what that
+# mandate means. Add leaves freely; never rename or delete one.
+#
+# `restricted: true` marks categories that are age-gated or regulated in India.
+# A mandate that does not explicitly allow a restricted leaf never gets ALLOW —
+# the strongest verdict available is ESCALATE. See DECISIONS.md.
+
+version: 1
+
+roots:
+
+  grocery:
+    label: Grocery
+    description: Packaged and perishable food and drink sold in a supermarket
+    leaves:
+      snacks_namkeen:
+        label: Snacks & Namkeen
+        description: Indian savoury snacks, chips, namkeen, bhujia, mixture, wafers
+        keywords: [namkeen, bhujia, chips, wafer, mixture, sev, chivda, papad, snack]
+      biscuits_cookies:
+        label: Biscuits & Cookies
+        description: Biscuits, cookies, crackers, rusk and tea-time baked snacks
+        keywords: [biscuit, cookie, cracker, rusk, marie, digestive]
+      chocolates_candy:
+        label: Chocolates & Candy
+        description: Chocolate bars, candy, toffee, mithai and confectionery
+        keywords: [chocolate, candy, toffee, lollipop, mithai, confection, eclair]
+      breakfast_cereal:
+        label: Breakfast & Cereal
+        description: Breakfast cereal, oats, cornflakes, muesli, poha and upma mixes
+        keywords: [cereal, oats, cornflake, muesli, poha, upma, breakfast, granola]
+      noodles_pasta:
+        label: Noodles & Pasta
+        description: Instant noodles, pasta, vermicelli, macaroni and soup mixes
+        keywords: [noodle, pasta, vermicelli, macaroni, maggi, soup, spaghetti]
+      sauces_spreads:
+        label: Sauces & Spreads
+        description: Ketchup, sauces, jam, honey, peanut butter, pickle and chutney
+        keywords: [ketchup, sauce, jam, honey, spread, pickle, achar, chutney, mayonnaise]
+      dairy_eggs:
+        label: Dairy & Eggs
+        description: Milk, curd, paneer, butter, cheese, ghee and eggs
+        keywords: [milk, curd, dahi, paneer, butter, cheese, ghee, egg, yoghurt, cream]
+      bakery_cakes:
+        label: Bakery & Cakes
+        description: Bread, buns, pav, cakes, pastries and bakery items
+        keywords: [bread, bun, pav, cake, pastry, croissant, muffin, bakery]
+      tea_coffee:
+        label: Tea & Coffee
+        description: Tea leaves, tea bags, instant coffee, filter coffee and green tea
+        keywords: [tea, chai, coffee, green tea, teabag, darjeeling, assam, decoction]
+      beverages_soft:
+        label: Soft Drinks & Juices
+        description: Non-alcoholic drinks, juices, soft drinks, energy and health drinks
+        keywords: [juice, soft drink, cola, soda, squash, energy drink, health drink, water]
+      meat_fish:
+        label: Meat, Poultry & Seafood
+        description: Fresh and frozen chicken, mutton, fish and seafood
+        keywords: [chicken, mutton, fish, prawn, seafood, meat, poultry, lamb]
+
+  produce:
+    label: Fresh Produce
+    description: Loose and packed fresh fruit, vegetables and herbs
+    leaves:
+      fresh_vegetables:
+        label: Fresh Vegetables
+        description: Loose and packed fresh vegetables including onion, potato, tomato
+        keywords: [onion, potato, tomato, brinjal, bhindi, gourd, cabbage, cauliflower, vegetable]
+      fresh_fruits:
+        label: Fresh Fruits
+        description: Fresh seasonal and imported fruit
+        keywords: [banana, apple, mango, orange, grape, papaya, guava, pomegranate, fruit]
+      herbs_leafy:
+        label: Herbs & Leafy Greens
+        description: Coriander, mint, curry leaves, spinach and other leafy greens
+        keywords: [coriander, dhania, mint, pudina, curry leaf, spinach, palak, methi, leafy]
+
+  staples:
+    label: Staples
+    description: Foodgrains, flour, pulses, cooking oil and spices
+    leaves:
+      atta_flour:
+        label: Atta & Flour
+        description: Wheat atta, maida, besan, rava, sooji and other milled flour
+        keywords: [atta, flour, maida, besan, rava, sooji, chakki, multigrain]
+      rice_grains:
+        label: Rice & Other Grains
+        description: Basmati and non-basmati rice, poha, millets and other grains
+        keywords: [rice, basmati, sona masoori, millet, ragi, bajra, jowar, quinoa]
+      dals_pulses:
+        label: Dals & Pulses
+        description: Toor, moong, chana, urad and masoor dal, rajma and chhole
+        keywords: [dal, daal, toor, arhar, moong, chana, urad, masoor, rajma, chhole, pulse]
+      edible_oil:
+        label: Edible Oils & Ghee
+        description: Sunflower, mustard, groundnut, coconut and olive cooking oil
+        keywords: [oil, sunflower, mustard, groundnut, refined, sesame, olive oil, vanaspati]
+      spices_masala:
+        label: Spices & Masala
+        description: Whole and ground spices, blended masalas and cooking pastes
+        keywords: [masala, haldi, turmeric, mirch, jeera, dhania, garam masala, spice, powder]
+      sugar_salt:
+        label: Sugar, Jaggery & Salt
+        description: Sugar, jaggery, gur, salt and sweeteners
+        keywords: [sugar, jaggery, gur, salt, namak, sweetener, honey sugar, misri]
+      dry_fruits_nuts:
+        label: Dry Fruits & Nuts
+        description: Almonds, cashews, raisins, dates, walnuts and seeds
+        keywords: [almond, badam, cashew, kaju, raisin, kishmish, date, walnut, pista, nut]
+
+  personal_care:
+    label: Personal Care
+    description: Beauty, hygiene and grooming products for personal use
+    leaves:
+      skin_care:
+        label: Skin Care
+        description: Face wash, cream, moisturiser, sunscreen, serum and lotion
+        keywords: [face wash, cream, moisturiser, lotion, sunscreen, serum, scrub, toner]
+      hair_care:
+        label: Hair Care
+        description: Shampoo, conditioner, hair oil, colour and styling products
+        keywords: [shampoo, conditioner, hair oil, hair colour, henna, mehendi, serum hair]
+      oral_care:
+        label: Oral Care
+        description: Toothpaste, toothbrush, mouthwash and dental care
+        keywords: [toothpaste, toothbrush, mouthwash, dental, floss, manjan]
+      bath_body:
+        label: Bath & Body
+        description: Soap, body wash, talc, handwash and bathing products
+        keywords: [soap, body wash, shower gel, talc, handwash, bathing bar, loofah]
+      fragrance_deodorant:
+        label: Fragrance & Deodorant
+        description: Perfume, eau de toilette, deodorant, body spray and attar
+        keywords: [perfume, deodorant, deo, body spray, eau de, fragrance, attar, cologne]
+      makeup_cosmetics:
+        label: Makeup & Cosmetics
+        description: Lipstick, kajal, foundation, nail polish and colour cosmetics
+        keywords: [lipstick, kajal, foundation, mascara, eyeliner, nail polish, compact, makeup]
+      shaving_grooming:
+        label: Shaving & Grooming
+        description: Razors, blades, shaving cream, trimmers and beard care
+        keywords: [razor, blade, shaving, trimmer, beard, aftershave, shave gel]
+      feminine_hygiene:
+        label: Feminine Hygiene
+        description: Sanitary pads, tampons, menstrual cups and intimate hygiene
+        keywords: [sanitary, pad, tampon, menstrual, whisper, stayfree, intimate wash]
+      baby_care:
+        label: Baby Care
+        description: Diapers, baby food, baby wipes, lotion and infant care
+        keywords: [diaper, baby, infant, wipes, pampers, huggies, cerelac, baby food]
+
+  household:
+    label: Household
+    description: Cleaning, laundry, kitchenware and general home supplies
+    leaves:
+      cleaning_supplies:
+        label: Cleaning Supplies
+        description: Floor cleaner, toilet cleaner, disinfectant and surface cleaners
+        keywords: [cleaner, disinfectant, phenyl, harpic, lizol, colin, scrub, wiper]
+      laundry:
+        label: Laundry
+        description: Detergent powder and liquid, fabric conditioner and stain removers
+        keywords: [detergent, washing powder, surf, ariel, rin, fabric conditioner, bleach]
+      dishwashing:
+        label: Dishwashing
+        description: Dishwash bar, liquid, scrubbers and dishwasher supplies
+        keywords: [dishwash, vim, scrubber, sponge, dish soap, dishwasher]
+      paper_disposables:
+        label: Paper & Disposables
+        description: Tissue, kitchen towel, foil, cling film and garbage bags
+        keywords: [tissue, napkin, kitchen towel, foil, cling film, garbage bag, disposable]
+      kitchenware:
+        label: Kitchenware & Storage
+        description: Containers, cookware, glassware, bottles and kitchen tools
+        keywords: [container, cookware, kadai, pan, glassware, bottle, casserole, tiffin]
+      pet_supplies:
+        label: Pet Supplies
+        description: Pet food, treats, grooming and pet accessories
+        keywords: [pet, dog, cat, pedigree, whiskas, pet food, kennel, litter]
+
+  alcohol:
+    label: Alcohol
+    description: Alcoholic beverages of all kinds
+    restricted: true
+    leaves:
+      whisky:
+        label: Whisky
+        description: Whisky, scotch, bourbon and blended malt spirits
+        keywords: [whisky, whiskey, scotch, bourbon, malt, blended]
+        restricted: true
+      beer:
+        label: Beer
+        description: Lager, ale, stout and craft beer
+        keywords: [beer, lager, ale, stout, pilsner, kingfisher, brew]
+        restricted: true
+      wine:
+        label: Wine
+        description: Red, white, rose and sparkling wine, champagne and sake
+        keywords: [wine, merlot, cabernet, sauvignon, chardonnay, shiraz, champagne, prosecco, sake]
+        restricted: true
+      rum:
+        label: Rum
+        description: Dark, white and spiced rum
+        keywords: [rum, old monk, bacardi, captain morgan]
+        restricted: true
+      vodka:
+        label: Vodka
+        description: Plain and flavoured vodka
+        keywords: [vodka, smirnoff, absolut, magic moments]
+        restricted: true
+      gin:
+        label: Gin
+        description: London dry, craft and flavoured gin
+        keywords: [gin, tonic gin, london dry, hendrick]
+        restricted: true
+      brandy:
+        label: Brandy
+        description: Brandy, cognac and armagnac
+        keywords: [brandy, cognac, armagnac, vsop, hennessy]
+        restricted: true
+      liqueur:
+        label: Liqueur & Other Spirits
+        description: Liqueurs, tequila, mead, cider and other spirits
+        keywords: [liqueur, tequila, mezcal, mead, cider, triple sec, baileys, sambuca]
+        restricted: true
+
+  tobacco:
+    label: Tobacco
+    description: Cigarettes, tobacco products and smoking accessories
+    restricted: true
+    leaves:
+      cigarettes:
+        label: Cigarettes & Tobacco
+        description: Cigarettes, cigars, rolling tobacco, gutkha and paan masala
+        keywords: [cigarette, cigar, tobacco, gutkha, paan masala, bidi, rolling]
+        restricted: true
+      smoking_accessories:
+        label: Smoking Accessories
+        description: Lighters, ashtrays, rolling papers and smoking accessories
+        keywords: [lighter, ashtray, rolling paper, hookah, shisha, vape]
+        restricted: true
+
+  apparel:
+    label: Apparel
+    description: Clothing and fashion accessories
+    leaves:
+      womens_ethnic:
+        label: Women's Ethnic Wear
+        description: Saree, kurta, salwar, lehenga, dupatta and ethnic sets
+        keywords: [saree, sari, kurta, kurti, salwar, lehenga, dupatta, anarkali, palazzo, ethnic]
+      womens_western:
+        label: Women's Western Wear
+        description: Tops, dresses, jeans, skirts, trousers and jumpsuits
+        keywords: [top, dress, jumpsuit, skirt, blouse, shrug, tunic, western]
+      mens_topwear:
+        label: Men's Topwear
+        description: Shirts, t-shirts, kurtas and sweatshirts for men
+        keywords: [shirt, t-shirt, tshirt, polo, sweatshirt, hoodie, mens kurta]
+      mens_bottomwear:
+        label: Men's Bottomwear
+        description: Trousers, jeans, shorts, track pants and chinos for men
+        keywords: [trouser, jeans, chino, shorts, track pant, pyjama, cargo]
+      innerwear_sleepwear:
+        label: Innerwear & Sleepwear
+        description: Innerwear, lingerie, vests, nightwear and loungewear
+        keywords: [innerwear, lingerie, bra, brief, vest, nightwear, pyjama set, lounge]
+      winterwear:
+        label: Winterwear
+        description: Jackets, sweaters, cardigans, shawls and thermal wear
+        keywords: [jacket, sweater, cardigan, shawl, thermal, coat, blazer, pullover]
+      bags_accessories:
+        label: Bags & Accessories
+        description: Handbags, backpacks, wallets, belts, watches and jewellery
+        keywords: [handbag, backpack, wallet, belt, watch, jewellery, earring, scarf, bag]
+
+  footwear:
+    label: Footwear
+    description: Shoes, sandals and all worn footwear
+    leaves:
+      casual_shoes:
+        label: Casual Shoes
+        description: Sneakers, loafers, canvas and everyday casual shoes
+        keywords: [sneaker, loafer, canvas shoe, casual shoe, slip-on, espadrille]
+      sports_shoes:
+        label: Sports Shoes
+        description: Running, training, walking and sports shoes
+        keywords: [running shoe, sports shoe, trainer, athletic, walking shoe, cleat]
+      formal_shoes:
+        label: Formal Shoes
+        description: Oxford, derby, brogue, dress and formal office shoes
+        keywords: [formal shoe, oxford, derby, brogue, dress shoe, monk strap]
+      sandals_flipflops:
+        label: Sandals & Flip-Flops
+        description: Sandals, floaters, flip-flops, slippers and chappals
+        keywords: [sandal, floater, flip flop, slipper, chappal, clog, mule]
+
+  electronics:
+    label: Electronics
+    description: Consumer electronics, appliances and accessories
+    leaves:
+      mobiles:
+        label: Mobile Phones
+        description: Smartphones, feature phones and tablets
+        keywords: [smartphone, mobile, phone, iphone, galaxy, redmi, realme, tablet]
+      laptops_computers:
+        label: Laptops & Computers
+        description: Laptops, desktops, chromebooks, monitors and computer hardware
+        keywords: [laptop, desktop, chromebook, notebook, monitor, keyboard, mouse, computer]
+      audio_headphones:
+        label: Audio & Headphones
+        description: Headphones, earphones, earbuds, speakers and soundbars
+        keywords: [headphone, earphone, earbud, airpod, speaker, soundbar, neckband, audio]
+      home_appliances:
+        label: Home Appliances
+        description: Mixer, microwave, refrigerator, washing machine, fan and AC
+        keywords: [mixer, grinder, microwave, refrigerator, fridge, washing machine, fan, air conditioner, iron]
+      accessories_chargers:
+        label: Accessories & Chargers
+        description: Chargers, cables, power banks, adapters and memory cards
+        keywords: [charger, cable, power bank, adapter, memory card, usb, dongle]
+
+  pharma:
+    label: Pharmacy
+    description: Medicines, supplements and medical devices
+    restricted: true
+    leaves:
+      otc_medicine:
+        label: Over-the-Counter Medicine
+        description: Non-prescription medicine such as painkillers, antacids and cough syrup
+        keywords: [paracetamol, crocin, antacid, cough syrup, balm, ors, digene, disprin]
+      prescription_medicine:
+        label: Prescription Medicine
+        description: Prescription-only allopathic medicine, tablets, capsules and injections
+        keywords: [tablet, capsule, injection, antibiotic, mg, strip of, prescription]
+        restricted: true
+      supplements_vitamins:
+        label: Supplements & Vitamins
+        description: Vitamins, protein powder, health supplements and nutraceuticals
+        keywords: [vitamin, supplement, protein powder, calcium, zinc, omega, multivitamin]
+      medical_devices:
+        label: Medical Devices & First Aid
+        description: Thermometers, BP monitors, glucometers, masks and first aid supplies
+        keywords: [thermometer, bp monitor, glucometer, oximeter, bandage, mask, first aid, syringe]
+
+  restaurant:
+    label: Restaurant & Food Delivery
+    description: Prepared meals ordered from a restaurant or food delivery service
+    leaves:
+      main_course:
+        label: Main Course
+        description: Curries, gravies, biryani, rice bowls and main dishes
+        keywords: [curry, gravy, biryani, masala, butter chicken, paneer, thali, bowl]
+      starters_snacks:
+        label: Starters & Snacks
+        description: Starters, tikka, rolls, burgers, pizza, momos and street food
+        keywords: [starter, tikka, roll, burger, pizza, momo, sandwich, fries, samosa]
+      breads_rice:
+        label: Breads & Rice
+        description: Roti, naan, paratha, steamed rice and pulao
+        keywords: [roti, naan, paratha, kulcha, steamed rice, pulao, chapati]
+      desserts_sweets:
+        label: Desserts & Sweets
+        description: Ice cream, gulab jamun, cakes, brownies and Indian sweets
+        keywords: [ice cream, gulab jamun, rasgulla, brownie, halwa, kheer, dessert, sundae]
+      beverages_restaurant:
+        label: Restaurant Beverages
+        description: Lassi, shakes, cold coffee, mocktails and restaurant drinks
+        keywords: [lassi, shake, cold coffee, mocktail, smoothie, falooda, iced tea]
+
+  # ---------------------------------------------------------------------------
+  # Not a retail root. Exists so V11 ADD_ON_CREEP is expressible as a category
+  # membership test rather than a language judgement. See DECISIONS.md.
+  # ---------------------------------------------------------------------------
+  services:
+    label: Services, Fees & Add-Ons
+    description: Non-merchandise line items added to a cart at checkout
+    leaves:
+      shipping_delivery:
+        label: Shipping & Delivery
+        description: Delivery charge, express shipping, priority and handling fees
+        keywords: [shipping, delivery charge, express, priority, handling fee, courier]
+      warranty_protection:
+        label: Warranty & Protection Plans
+        description: Extended warranty, damage protection and service plans
+        keywords: [warranty, protection plan, extended cover, service plan, amc]
+      insurance:
+        label: Insurance
+        description: Purchase, shipment or device insurance sold at checkout
+        keywords: [insurance, insured, coverage, policy, premium]
+      packaging_giftwrap:
+        label: Packaging & Gift Wrap
+        description: Gift wrapping, gift message and premium packaging charges
+        keywords: [gift wrap, gift packing, packaging charge, gift message, carry bag]

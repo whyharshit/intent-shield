@@ -1,0 +1,26 @@
+# Core
+pydantic>=2.7
+pyyaml>=6.0
+
+# Service (Milestone 2+)
+fastapi>=0.110
+uvicorn[standard]>=0.29
+
+# Mandate signing — AP2 uses ECDSA P-256
+cryptography>=42.0
+
+# Category mapping and calibration (Milestone 2+)
+sentence-transformers>=2.7
+numpy>=1.26
+scikit-learn>=1.4
+
+# LLM provider, kept behind an interface
+anthropic>=0.30
+
+# UI and eval
+streamlit>=1.33
+matplotlib>=3.8
+
+# Dev
+pytest>=8.0
+ruff>=0.4

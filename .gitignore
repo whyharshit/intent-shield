@@ -1,0 +1,19 @@
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.env
+.pytest_cache/
+.ruff_cache/
+*.db
+
+# Raw third-party sources: downloaded, not redistributed.
+# `make dataset` derives data/catalog/catalog.jsonl from these.
+# See DECISIONS.md D-011 and the source table in data/generator/catalog.py.
+data/raw/
+archive*/
+archive*.zip
+
+# Generated
+data/catalog/*.jsonl
+eval/REPORT.md
